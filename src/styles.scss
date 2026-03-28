@@ -178,3 +178,12 @@ body[data-theme='contrast'] {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Fluent UI high contrast */
+body[data-theme="contrast"] {
+  --colorNeutralBackground1: #000000;
+  --colorNeutralBackground2: #000000;
+  --colorBrandBackground: #1aebff;
+  --colorBrandForeground1: #1aebff;
+  --colorBrandStroke1: #1aebff;
+}
