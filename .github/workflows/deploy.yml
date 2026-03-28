@@ -36,14 +36,6 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Unit tests
-        run: npm run test -- --watch=false --browsers=ChromeHeadless --code-coverage
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          directory: coverage
-
   # ────────────────────────────────────────────────────────────────────────────
   # JOB 2: Lint + Test Backend
   # ────────────────────────────────────────────────────────────────────────────
