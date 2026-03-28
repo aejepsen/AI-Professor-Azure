@@ -12,13 +12,24 @@ from pathlib import Path
 
 from datasets import Dataset
 from ragas import evaluate
-from ragas.metrics import (
+from ragas.metrics.collections import (
     faithfulness,
     answer_relevancy,
     context_recall,
     context_precision,
     answer_correctness,
 )
+from ragas.llms import LangchainLLMWrapper
+from langchain_anthropic import ChatAnthropic
+import os as _os
+
+# Configura RAGAS para usar Anthropic ao invés de OpenAI
+_anthropic_llm = LangchainLLMWrapper(ChatAnthropic(
+    model="claude-haiku-4-5-20251001",
+    api_key=_os.getenv("ANTHROPIC_API_KEY", ""),
+))
+for _m in [faithfulness, answer_relevancy, context_recall, context_precision, answer_correctness]:
+    _m.llm = _anthropic_llm
 
 
 # Dataset de avaliação — perguntas com ground truth conhecidas
