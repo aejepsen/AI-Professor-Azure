@@ -199,9 +199,9 @@ jobs:
           retention-days: 14
 
   # ────────────────────────────────────────────────────────────────────────────
-  # JOB 6: RAGAS Evaluation (post-deploy)
+  # JOB 6: Quality Evaluation (post-deploy)
   # ────────────────────────────────────────────────────────────────────────────
-  ragas-eval:
+  quality-eval:
     name: 📊 Quality Gate
     runs-on: ubuntu-latest
     needs: [deploy-backend]
@@ -218,17 +218,17 @@ jobs:
       - name: Install evaluation deps
         run: pip install httpx anthropic
 
-      - name: Run RAGAS evaluation
+      - name: Run Quality evaluation
         run: python evaluation/quality_eval.py --mode=regression --fail-below=0.10
         env:
           API_URL:           ${{ secrets.API_URL }}
           API_TEST_TOKEN:    ${{ secrets.RAGAS_TEST_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - name: Upload RAGAS report
+      - name: Upload Quality report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ragas-report
+          name: quality-report
           path: evaluation/reports/
           retention-days: 30
