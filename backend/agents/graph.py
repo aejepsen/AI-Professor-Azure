@@ -12,11 +12,6 @@ import anthropic
 
 from .search_agent import SearchAgent
 from .video_agent import VideoAgent
-from .doc_agent import DocAgent
-from .compliance_agent import ComplianceAgent
-from .memory_agent import MemoryAgent
-from .evaluator_agent import EvaluatorAgent
-from ..services.prompt_service import load_system_prompt
 
 
 # ─── State ───────────────────────────────────────────────────────────────────
