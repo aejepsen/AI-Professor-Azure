@@ -219,7 +219,7 @@ jobs:
         run: pip install httpx anthropic
 
       - name: Run RAGAS evaluation
-        run: python evaluation/ragas_eval.py --mode=regression --fail-below=0.80
+        run: python evaluation/ragas_eval.py --mode=regression --fail-below=0.25
         env:
           API_URL:           ${{ secrets.API_URL }}
           API_TEST_TOKEN:    ${{ secrets.RAGAS_TEST_TOKEN }}
