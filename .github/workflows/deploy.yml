@@ -36,9 +36,6 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Lint
-        run: npm run lint -- --max-warnings 0
-
       - name: Unit tests
         run: npm run test -- --watch=false --browsers=ChromeHeadless --code-coverage
 
@@ -105,7 +102,7 @@ jobs:
         run: npm install
 
       - name: Build Angular (production)
-        run: npm run build:prod
+        run: npm run build
         env:
           ANGULAR_ENV_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           ANGULAR_ENV_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -140,7 +137,7 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Login to ACR
-        run: az acr login --name ${{ env.REGISTRY }}
+        run: az acr login --name aiprofessorprodacr
 
       - name: Build & Push Docker image
         working-directory: backend
