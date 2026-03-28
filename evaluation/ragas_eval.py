@@ -14,20 +14,15 @@ from pathlib import Path
 import httpx
 from datasets import Dataset
 from ragas import evaluate
-from ragas.metrics.collections import (
-    faithfulness,
-    answer_relevancy,
-    context_recall,
-    context_precision,
-    answer_correctness,
-)
-from ragas.llms import llm_factory
-from anthropic import Anthropic
-
-# Configura Claude Haiku como LLM avaliador via llm_factory
-_llm = llm_factory("claude-haiku-4-5-20251001", client=Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", "")))
-for _m in [faithfulness, answer_relevancy, context_recall, context_precision, answer_correctness]:
-    _m.llm = _llm
+from ragas.metrics.collections import Faithfulness, AnswerRelevancy, ContextRecall, ContextPrecision, AnswerCorrectness
+from ragas.llms import LangchainLLMWrapper
+from langchain_anthropic import ChatAnthropic
+_llm = LangchainLLMWrapper(ChatAnthropic(model="claude-haiku-4-5-20251001", api_key=os.environ.get("ANTHROPIC_API_KEY","")))
+faithfulness = Faithfulness(llm=_llm)
+answer_relevancy = AnswerRelevancy(llm=_llm)
+context_recall = ContextRecall(llm=_llm)
+context_precision = ContextPrecision(llm=_llm)
+answer_correctness = AnswerCorrectness(llm=_llm)
 
 EVAL_DATASET = [
     {
