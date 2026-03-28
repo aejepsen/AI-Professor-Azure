@@ -216,7 +216,7 @@ jobs:
           python-version: 3.11
 
       - name: Install evaluation deps
-        run: pip install ragas datasets anthropic langchain-anthropic
+        run: pip install ragas datasets anthropic httpx
 
       - name: Run RAGAS evaluation
         run: python evaluation/ragas_eval.py --mode=regression --fail-below=0.80
