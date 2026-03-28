@@ -5,13 +5,15 @@ Orquestra o fluxo: classificação de intenção → retrieval → geração →
 """
 
 import asyncio
-from typing import AsyncGenerator, TypedDict, Annotated, Literal
+from typing import AsyncGenerator, TypedDict, Literal
 from langgraph.graph import StateGraph, END
-from langgraph.graph.message import add_messages
 import anthropic
 
-from .search_agent import SearchAgent
-from .video_agent import VideoAgent
+from agents.search_agent import SearchAgent
+from agents.video_agent import VideoAgent
+from agents.compliance_agent import ComplianceAgent
+from agents.evaluator_agent import EvaluatorAgent
+from services.prompt_service import load_system_prompt
 
 
 # ─── State ───────────────────────────────────────────────────────────────────
@@ -22,11 +24,11 @@ class AgentState(TypedDict):
     history:         list[dict]
     user_groups:     list[str]
     user_id:         str
-    intent:          str          # 'video' | 'document' | 'general' | 'policy'
-    chunks:          list[dict]   # retrieved chunks com metadados
-    answer:          str          # resposta gerada pelo Claude
-    sources:         list[dict]   # fontes formatadas para o Angular
-    approved:        bool         # passou na validação de compliance
+    intent:          str
+    chunks:          list[dict]
+    answer:          str
+    sources:         list[dict]
+    approved:        bool
     ragas_score:     float
 
 
@@ -67,14 +69,14 @@ async def enrich_video(state: AgentState) -> AgentState:
 
 
 async def generate_answer(state: AgentState) -> AgentState:
-    """Geração de resposta com Claude claude-opus-4-5."""
+    """Geração de resposta com Claude."""
     client = anthropic.AsyncAnthropic()
 
     system_prompt = load_system_prompt()
     context = _format_context(state["chunks"])
 
     messages = [
-        *state["history"][-6:],   # últimas 6 trocas para contexto
+        *state["history"][-6:],
         {"role": "user", "content": f"Contexto:\n{context}\n\nPergunta: {state['question']}"}
     ]
 
@@ -103,7 +105,7 @@ async def validate_compliance(state: AgentState) -> AgentState:
 
 
 async def evaluate_quality(state: AgentState) -> AgentState:
-    """Calcula RAGAS score da resposta (background, não bloqueia o stream)."""
+    """Calcula RAGAS score da resposta em background."""
     agent = EvaluatorAgent()
     score = await agent.evaluate_async(
         question=state["question"],
@@ -119,7 +121,7 @@ def route_by_intent(state: AgentState) -> Literal["enrich_video", "generate_answ
     return "enrich_video" if state["intent"] == "video" else "generate_answer"
 
 
-def route_compliance(state: AgentState) -> Literal["evaluate_quality", END]:
+def route_compliance(state: AgentState):
     return "evaluate_quality" if state["approved"] else END
 
 
@@ -158,13 +160,9 @@ async def run_agent_stream(
     user_groups: list[str],
     user_id: str,
 ) -> AsyncGenerator[dict, None]:
-    """
-    Roda o grafo e emite chunks SSE para o Angular.
-    Faz streaming real do Claude via Anthropic SDK enquanto o grafo processa.
-    """
+    """Roda o grafo e emite chunks SSE para o Angular."""
     client = anthropic.AsyncAnthropic()
 
-    # 1. Classify + Retrieve (rápido, sem streaming)
     state: AgentState = {
         "question": question, "conversation_id": conversation_id,
         "history": history, "user_groups": user_groups, "user_id": user_id,
@@ -176,13 +174,11 @@ async def run_agent_stream(
     if state["intent"] == "video":
         state = await enrich_video(state)
 
-    # 2. Compliance check rápido nos chunks
-    agent = ComplianceAgent()
-    if not await agent.validate_chunks(state["chunks"], user_groups):
+    compliance = ComplianceAgent()
+    if not await compliance.validate_chunks(state["chunks"], user_groups):
         yield {"type": "error", "error": "Você não tem permissão para acessar este conteúdo."}
         return
 
-    # 3. Streaming do Claude
     system_prompt = load_system_prompt()
     context = _format_context(state["chunks"])
     messages = [
@@ -201,14 +197,10 @@ async def run_agent_stream(
             full_answer += text
             yield {"type": "token", "text": text}
 
-    # 4. Emit sources
     sources = _format_sources(state["chunks"])
     yield {"type": "sources", "sources": sources}
-
-    # 5. Done
     yield {"type": "done"}
 
-    # 6. RAGAS em background (não bloqueia o stream)
     asyncio.create_task(
         EvaluatorAgent().evaluate_async(
             question=question, answer=full_answer,
@@ -225,7 +217,7 @@ def _format_context(chunks: list[dict]) -> str:
     for i, c in enumerate(chunks, 1):
         ts = f" [{c['timestamp_start']} → {c['timestamp_end']}]" if c.get("timestamp_start") else ""
         pg = f" [p. {c['page']}]" if c.get("page") else ""
-        parts.append(f"[{i}] {c['source_name']}{ts}{pg}:\n{c['content']}\n")
+        parts.append(f"[{i}] {c.get('source_name','')}{ts}{pg}:\n{c.get('content','')}\n")
     return "\n".join(parts)
 
 
@@ -233,19 +225,19 @@ def _format_sources(chunks: list[dict]) -> list[dict]:
     seen = set()
     sources = []
     for c in chunks:
-        key = c["source_name"] + str(c.get("timestamp_start", ""))
+        key = c.get("source_name", "") + str(c.get("timestamp_start", ""))
         if key in seen:
             continue
         seen.add(key)
         sources.append({
-            "id":                c["id"],
-            "type":              c["source_type"],
-            "name":              c["source_name"],
-            "url":               c["source_url"],
+            "id":                c.get("id", ""),
+            "type":              c.get("source_type", "document"),
+            "name":              c.get("source_name", ""),
+            "url":               c.get("source_url", ""),
             "page":              c.get("page"),
             "timestamp_start":   c.get("timestamp_start_seconds"),
             "timestamp_end":     c.get("timestamp_end_seconds"),
-            "sensitivity_label": c["sensitivity_label"],
+            "sensitivity_label": c.get("sensitivity_label", "internal"),
             "relevance_score":   c.get("@search.reranker_score", 0.8),
         })
-    return sources[:5]   # máximo 5 fontes por resposta
+    return sources[:5]

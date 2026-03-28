@@ -1,122 +1,95 @@
 // src/app/core/services/chat.service.ts
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, Subject } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { TeamsAuthService } from '../auth/teams-auth.service';
-
-export interface StreamChunk {
-  type: 'token' | 'sources' | 'done' | 'error';
-  text?: string;
-  sources?: AnswerSource[];
-  error?: string;
-}
-
-export interface AnswerSource {
-  id: string;
-  type: 'video' | 'document' | 'policy';
-  name: string;
-  url: string;
-  page?: number;
-  timestamp_start?: number;   // seconds
-  timestamp_end?: number;
-  sensitivity_label: string;
-  relevance_score: number;
-}
 
 export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  sources?: AnswerSource[];
-  timestamp: Date;
-  ragas_score?: number;
+  id:        string;
+  role:      'user' | 'assistant';
+  content:   string;
+  sources?:  Source[];
+  timestamp: string;
+  loading?:  boolean;
+  error?:    string;
 }
 
-export interface ConversationHistory {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-  created_at: Date;
-  updated_at: Date;
+export interface Source {
+  id:               string;
+  type:             string;
+  name:             string;
+  url:              string;
+  page?:            number;
+  timestamp_start?: number;
+  timestamp_end?:   number;
+  relevance_score:  number;
+}
+
+export interface ChatRequest {
+  question:        string;
+  conversation_id: string;
+  history:         { role: string; content: string }[];
 }
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
-  private auth = inject(TeamsAuthService);
   private http = inject(HttpClient);
+  private base = environment.apiUrl;
 
-  /**
-   * Streams the answer from Claude via SSE.
-   * Each emission is a StreamChunk — token, sources, or done.
-   */
   streamAnswer(
     question: string,
     conversationId: string,
-    history: ChatMessage[]
-  ): Observable<StreamChunk> {
-    const subject = new Subject<StreamChunk>();
-    const token   = this.auth.token();
+    history: { role: string; content: string }[] = [],
+  ): Observable<any> {
+    return new Observable(subscriber => {
+      const url = `${this.base}/chat/stream`;
+      const body: ChatRequest = { question, conversation_id: conversationId, history };
 
-    const eventSource = new EventSourcePolyfill(
-      `${environment.apiUrl}/chat/stream`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        // EventSource does not support POST natively — use polyfill
+      fetch(url, {
         method: 'POST',
-        body: JSON.stringify({
-          question,
-          conversation_id: conversationId,
-          history: history.slice(-10).map(m => ({ role: m.role, content: m.content })),
-        }),
-      }
-    );
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(async response => {
+        if (!response.ok || !response.body) {
+          subscriber.error(new Error(`HTTP ${response.status}`));
+          return;
+        }
 
-    eventSource.onmessage = (event: MessageEvent) => {
-      const chunk: StreamChunk = JSON.parse(event.data);
-      subject.next(chunk);
-      if (chunk.type === 'done' || chunk.type === 'error') {
-        eventSource.close();
-        subject.complete();
-      }
-    };
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-    eventSource.onerror = () => {
-      subject.next({ type: 'error', error: 'Conexão interrompida. Tente novamente.' });
-      eventSource.close();
-      subject.complete();
-    };
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-    return subject.asObservable();
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const chunk = JSON.parse(line.slice(6));
+                subscriber.next(chunk);
+                if (chunk.type === 'done' || chunk.type === 'error') {
+                  subscriber.complete();
+                  return;
+                }
+              } catch (_) {}
+            }
+          }
+        }
+        subscriber.complete();
+      }).catch(err => subscriber.error(err));
+    });
   }
 
-  /** Submit thumbs down feedback — triggers RAGAS re-evaluation */
-  submitFeedback(messageId: string, positive: boolean, comment?: string): Observable<void> {
-    return this.http.post<void>(`${environment.apiUrl}/chat/feedback`, {
+  submitFeedback(messageId: string, positive: boolean, comment?: string) {
+    return this.http.post(`${this.base}/chat/feedback`, {
       message_id: messageId,
       positive,
       comment,
     });
   }
-
-  /** Load conversation history (paginated) */
-  getHistory(page = 0, size = 20): Observable<ConversationHistory[]> {
-    return this.http.get<ConversationHistory[]>(
-      `${environment.apiUrl}/conversations?page=${page}&size=${size}`
-    );
-  }
-
-  /** Load a specific conversation */
-  getConversation(id: string): Observable<ConversationHistory> {
-    return this.http.get<ConversationHistory>(`${environment.apiUrl}/conversations/${id}`);
-  }
-}
-
-// Minimal EventSource polyfill type reference
-// Install: npm install event-source-polyfill
-declare class EventSourcePolyfill {
-  constructor(url: string, options: any);
-  onmessage: ((event: MessageEvent) => void) | null;
-  onerror: (() => void) | null;
-  close(): void;
 }
