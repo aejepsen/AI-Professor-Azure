@@ -202,7 +202,7 @@ jobs:
   # JOB 6: RAGAS Evaluation (post-deploy)
   # ────────────────────────────────────────────────────────────────────────────
   ragas-eval:
-    name: 📊 RAGAS Quality Gate
+    name: 📊 Quality Gate
     runs-on: ubuntu-latest
     needs: [deploy-backend]
     if: github.ref == 'refs/heads/main'
@@ -219,7 +219,7 @@ jobs:
         run: pip install httpx anthropic
 
       - name: Run RAGAS evaluation
-        run: python evaluation/ragas_eval.py --mode=regression --fail-below=0.10
+        run: python evaluation/quality_eval.py --mode=regression --fail-below=0.10
         env:
           API_URL:           ${{ secrets.API_URL }}
           API_TEST_TOKEN:    ${{ secrets.RAGAS_TEST_TOKEN }}

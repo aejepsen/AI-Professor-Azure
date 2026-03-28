@@ -1,7 +1,7 @@
-# evaluation/ragas_eval.py
+# evaluation/quality_eval.py
 """
-Avaliacao de qualidade com Claude Haiku como juiz.
-Implementacao propria das metricas RAGAS sem dependencia de OpenAI.
+Avaliacao automatica de qualidade usando Claude Haiku como juiz.
+Metricas: faithfulness, answer_relevancy, context_recall, context_precision, answer_correctness.
 """
 import argparse, json, sys, os
 from datetime import datetime
