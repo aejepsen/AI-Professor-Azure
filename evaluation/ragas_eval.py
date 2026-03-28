@@ -36,7 +36,10 @@ def judge_with_claude(question, answer, context, ground_truth, metric):
             model="claude-haiku-4-5-20251001", max_tokens=10,
             messages=[{"role": "user", "content": prompts[metric]}]
         )
-        return float(resp.content[0].text.strip())
+        import re
+        text = resp.content[0].text.strip()
+        match = re.search(r"[0-9]+\.?[0-9]*", text)
+        return min(float(match.group()) if match else 0.5, 1.0)
     except Exception:
         return 0.5
 
