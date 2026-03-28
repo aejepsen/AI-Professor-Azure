@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from .auth import verify_token, UserContext
+from api.auth import verify_token, UserContext
 from agents.graph import run_agent_stream
 from services.knowledge_service import KnowledgeService
 from services.conversation_service import ConversationService
