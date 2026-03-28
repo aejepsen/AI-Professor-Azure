@@ -58,7 +58,7 @@ def run_evaluation(api_url: str, api_token: str, fail_below: float = 0.80) -> di
     print()
 
     results_data = {
-        "questions": [], "answers": [], "contexts": [], "ground_truths": []
+        "user_input": [], "response": [], "retrieved_contexts": [], "reference": []
     }
 
     # Coleta respostas do backend
@@ -87,10 +87,10 @@ def run_evaluation(api_url: str, api_token: str, fail_below: float = 0.80) -> di
             )
             answer = chat_resp.json().get("answer", "")
 
-            results_data["questions"].append(item["question"])
-            results_data["answers"].append(answer)
-            results_data["contexts"].append(contexts)
-            results_data["ground_truths"].append(item["ground_truth"])
+            results_data["user_input"].append(item["question"])
+            results_data["response"].append(answer)
+            results_data["retrieved_contexts"].append(contexts)
+            results_data["reference"].append(item["ground_truth"])
 
     # Avalia com RAGAS
     dataset = Dataset.from_dict(results_data)
