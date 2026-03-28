@@ -17,10 +17,7 @@ from pydantic import BaseModel
 
 from api.auth import verify_token, UserContext
 from agents.graph import run_agent_stream
-from services.knowledge_service import KnowledgeService
 from services.conversation_service import ConversationService
-from services.dashboard_service import DashboardService
-from services.ingest_service import IngestService
 
 app = FastAPI(
     title="AI Professor API",
@@ -63,7 +60,7 @@ async def exchange_token(body: TokenExchangeRequest):
     OBO (On-Behalf-Of) flow: troca o token do Teams por um access token
     com os grupos Entra ID do usuário.
     """
-    from .auth import exchange_teams_token_obo
+    from api.auth import exchange_teams_token_obo
     result = await exchange_teams_token_obo(body.teams_token)
     return result
 
@@ -112,8 +109,7 @@ async def submit_feedback(
     Registra feedback do usuário (thumbs up/down).
     Thumbs down dispara re-avaliação RAGAS do chunk correspondente.
     """
-    from .services.feedback_service import FeedbackService
-    await FeedbackService.record(
+        await FeedbackService.record(
         message_id=body.message_id,
         user_id=user.id,
         positive=body.positive,
