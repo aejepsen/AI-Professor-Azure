@@ -16,11 +16,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .auth import verify_token, UserContext
-from .agents.graph import run_agent_stream
-from .services.knowledge_service import KnowledgeService
-from .services.conversation_service import ConversationService
-from .services.dashboard_service import DashboardService
-from .services.ingest_service import IngestService
+from agents.graph import run_agent_stream
+from services.knowledge_service import KnowledgeService
+from services.conversation_service import ConversationService
+from services.dashboard_service import DashboardService
+from services.ingest_service import IngestService
 
 app = FastAPI(
     title="AI Professor API",
