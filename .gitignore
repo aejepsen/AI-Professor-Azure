@@ -1,0 +1,35 @@
+# Credenciais e segredos
+.env
+*.env
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+tfplan
+*.tfvars
+.terraform.lock.hcl
+
+# Node
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Documento de deploy (contém dados sensiveis)
+AI_Professor_Azure_Deploy.docx

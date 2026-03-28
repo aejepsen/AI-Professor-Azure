@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>AI Professor</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f2d5e">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!--
+    Content Security Policy para Teams Tab Apps.
+    Permite conexões apenas com domínios corporativos aprovados.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src  'self' 'unsafe-inline' https://res.cdn.office.net;
+    style-src   'self' 'unsafe-inline' https://res.cdn.office.net;
+    font-src    'self' https://res.cdn.office.net;
+    img-src     'self' data: https://*.microsoft.com https://*.microsoftonline.com https://*.blob.core.windows.net;
+    connect-src 'self'
+                https://login.microsoftonline.com
+                https://graph.microsoft.com
+                https://api-ai-professor.empresa.com
+                https://*.search.windows.net;
+    frame-ancestors https://teams.microsoft.com https://teams.live.com;
+  ">
+</head>
+<body data-theme="default">
+  <app-root></app-root>
+</body>
+</html>
