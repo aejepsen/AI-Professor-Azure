@@ -2,7 +2,7 @@
 
 Angular 17 + FastAPI + LangGraph + Claude claude-opus-4-5 — Microsoft Teams Tab App.
 
-## Estrutura
+## Estrutura.
 
 ```
 ai-professor/
