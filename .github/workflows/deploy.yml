@@ -10,10 +10,10 @@ on:
     branches: [main]
 
 env:
-  AZURE_RESOURCE_GROUP:     ai-professor-rg
-  ANGULAR_APP_NAME:         ai-professor-frontend
-  BACKEND_CONTAINER_APP:    ai-professor-backend
-  REGISTRY:                 aiprofessor.azurecr.io
+  AZURE_RESOURCE_GROUP:     ai-professor-prod-rg
+  ANGULAR_APP_NAME:         ai-professor-prod-frontend
+  BACKEND_CONTAINER_APP:    ai-professor-prod-backend
+  REGISTRY:                 aiprofessorprodacr.azurecr.io
   BACKEND_IMAGE:            ai-professor-backend
 
 jobs:
@@ -24,9 +24,6 @@ jobs:
   test-frontend:
     name: 🧪 Test Angular
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
 
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +33,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -50,7 +47,7 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
-          directory: frontend/coverage
+          directory: coverage
 
   # ────────────────────────────────────────────────────────────────────────────
   # JOB 2: Lint + Test Backend
@@ -72,7 +69,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        run: pip install -r requirements.txt
 
       - name: Lint (ruff)
         run: ruff check .
@@ -83,10 +80,10 @@ jobs:
       - name: Unit tests (pytest)
         run: pytest tests/ -v --cov=api --cov=agents --cov-report=xml
         env:
-          AZURE_TENANT_ID:    ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID:    ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID:     ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID:     ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ────────────────────────────────────────────────────────────────────────────
   # JOB 3: Build + Deploy Angular → Azure Static Web Apps
@@ -106,21 +103,18 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        working-directory: frontend
         run: npm ci
 
       - name: Build Angular (production)
-        working-directory: frontend
         run: npm run build:prod
         env:
-          # Injeta variáveis de ambiente no build Angular
-          ANGULAR_ENV_CLIENT_ID:    ${{ secrets.AZURE_CLIENT_ID }}
-          ANGULAR_ENV_TENANT_ID:    ${{ secrets.AZURE_TENANT_ID }}
-          ANGULAR_ENV_API_URL:      ${{ secrets.API_URL }}
-          ANGULAR_ENV_API_SCOPE:    ${{ secrets.API_SCOPE }}
+          ANGULAR_ENV_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ANGULAR_ENV_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ANGULAR_ENV_API_URL:   ${{ secrets.API_URL }}
+          ANGULAR_ENV_API_SCOPE: ${{ secrets.API_SCOPE }}
 
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
@@ -128,7 +122,7 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
-          app_location:    frontend
+          app_location:    /
           output_location: dist/ai-professor-teams/browser
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -183,7 +177,7 @@ jobs:
           exit 1
 
   # ────────────────────────────────────────────────────────────────────────────
-  # JOB 5: E2E Tests (Playwright) após deploy
+  # JOB 5: E2E Tests (Playwright) [DESATIVADO]
   # ────────────────────────────────────────────────────────────────────────────
   e2e:
     name: 🎭 E2E Tests (Playwright) [DESATIVADO]
@@ -200,16 +194,14 @@ jobs:
           node-version: 20
 
       - name: Install Playwright
-        working-directory: frontend
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
       - name: Run E2E tests
-        working-directory: frontend
         run: npx playwright test
         env:
-          BASE_URL:       ${{ secrets.TEAMS_TAB_URL }}
+          BASE_URL:        ${{ secrets.TEAMS_TAB_URL }}
           TEST_USER_EMAIL: ${{ secrets.E2E_TEST_USER }}
           TEST_USER_PASS:  ${{ secrets.E2E_TEST_PASS }}
 
