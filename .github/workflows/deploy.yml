@@ -22,9 +22,8 @@ jobs:
   # JOB 1: Lint + Test Angular
   # ────────────────────────────────────────────────────────────────────────────
   test-frontend:
-    name: 🧪 Test Angular [DESATIVADO]
+    name: 🧪 Test Angular
     runs-on: ubuntu-latest
-    if: false  # Frontend incompleto — arquivos faltando
 
     steps:
       - uses: actions/checkout@v4
@@ -77,12 +76,11 @@ jobs:
   # JOB 3: Build + Deploy Angular → Azure Static Web Apps
   # ────────────────────────────────────────────────────────────────────────────
   deploy-frontend:
-    name: 🚀 Deploy Angular [DESATIVADO]
-    if: false  # Frontend incompleto
+    name: 🚀 Deploy Angular → Static Web Apps
     runs-on: ubuntu-latest
     needs: [test-frontend]
+    if: github.ref == 'refs/heads/main'
     environment: production
-    #
 
     steps:
       - uses: actions/checkout@v4

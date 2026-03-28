@@ -189,3 +189,64 @@ async def health():
         "version":   "3.0.0",
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+
+# ─── Evaluation (RAGAS) ───────────────────────────────────────────────────────
+
+class EvalChatRequest(BaseModel):
+    question: str
+    contexts: list[str] = []
+
+
+@app.post("/chat/eval")
+async def chat_eval(
+    body: EvalChatRequest,
+    authorization: Optional[str] = None,
+):
+    """
+    Endpoint síncrono para avaliação RAGAS.
+    Aceita RAGAS_TEST_TOKEN sem validação Entra ID.
+    """
+    import os
+    import anthropic as _anthropic
+
+    expected_token = os.getenv("RAGAS_TEST_TOKEN", "")
+    auth_header = authorization or ""
+    token = auth_header.replace("Bearer ", "").strip()
+
+    if expected_token and token != expected_token:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    client = _anthropic.Anthropic()
+    context = "\n\n".join(body.contexts) if body.contexts else "Sem contexto disponível."
+
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=500,
+        system="Você é o AI Professor. Responda em português baseado no contexto fornecido.",
+        messages=[{
+            "role": "user",
+            "content": f"Contexto:\n{context}\n\nPergunta: {body.question}"
+        }],
+    )
+    return {"answer": response.content[0].text}
+
+
+@app.get("/eval/search")
+async def eval_search(
+    q: str,
+    top: int = 5,
+    authorization: Optional[str] = None,
+):
+    """Busca sem autenticação Entra ID para uso no RAGAS eval."""
+    import os
+
+    expected_token = os.getenv("RAGAS_TEST_TOKEN", "")
+    auth_header = authorization or ""
+    token = auth_header.replace("Bearer ", "").strip()
+
+    if expected_token and token != expected_token:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+    svc = KnowledgeService()
+    return await svc.search(query=q, user_groups=[], top=top)

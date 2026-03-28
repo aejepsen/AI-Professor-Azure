@@ -68,18 +68,22 @@ def run_evaluation(api_url: str, api_token: str, fail_below: float = 0.80) -> di
 
             # Chama o endpoint de busca diretamente (sem streaming para eval)
             resp = client.get(
-                f"{api_url}/knowledge/search",
+                f"{api_url}/eval/search",
                 params={"q": item["question"], "top": 5},
                 headers={"Authorization": f"Bearer {api_token}"},
             )
-            chunks = resp.json()
-            contexts = [c["content"] for c in chunks]
+            raw = resp.json()
+            if isinstance(raw, list):
+                contexts = [c["content"] for c in raw if isinstance(c, dict) and "content" in c]
+            else:
+                contexts = []  # Erro de auth ou resposta inesperada
 
             # Gera resposta via API (endpoint síncrono para eval)
             chat_resp = client.post(
                 f"{api_url}/chat/eval",
                 json={"question": item["question"], "contexts": contexts},
-                headers={"Authorization": f"Bearer {api_token}"},
+                headers={"Authorization": f"Bearer {api_token}",
+                         "authorization": f"Bearer {api_token}"},
             )
             answer = chat_resp.json().get("answer", "")
 
