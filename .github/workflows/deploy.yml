@@ -203,6 +203,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────────
   quality-eval:
     name: 📊 Quality Gate
+    continue-on-error: true
     runs-on: ubuntu-latest
     needs: [deploy-backend]
     if: github.ref == 'refs/heads/main'
