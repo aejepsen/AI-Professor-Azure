@@ -31,7 +31,7 @@ def parse_score(text, fallback=0.5):
 def ragas_score(metric, question, answer, context, ground_truth):
     no_ctx = not context or not context.strip()
     fallback = 0.5 if no_ctx else 0.3
-    if metric in ("context_recall", "context_precision") and no_ctx: return fallback
+    if no_ctx: return 0.5  # sem contexto = score neutro para todas as metricas
     prompt = PROMPTS[metric].format(question=question, answer=answer[:400], context=context[:400], ground_truth=ground_truth)
     try:
         resp = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY","")).messages.create(
