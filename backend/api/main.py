@@ -201,7 +201,7 @@ class EvalChatRequest(BaseModel):
 @app.post("/chat/eval")
 async def chat_eval(
     body: EvalChatRequest,
-    authorization: Optional[str] = None,
+    request: Request = None,
 ):
     """
     Endpoint síncrono para avaliação RAGAS.
@@ -236,7 +236,7 @@ async def chat_eval(
 async def eval_search(
     q: str,
     top: int = 5,
-    authorization: Optional[str] = None,
+    request: Request = None,
 ):
     """Busca sem autenticação Entra ID para uso no RAGAS eval."""
     import os
