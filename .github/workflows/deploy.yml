@@ -93,13 +93,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Set environment variables
+        run: |
+          sed -i "s|apiUrl:.*|apiUrl: '${{ secrets.API_URL }}',|" src/environments/environment.prod.ts
+          sed -i "s|clientId:.*|clientId: '${{ secrets.AZURE_CLIENT_ID }}',|" src/environments/environment.prod.ts
+          sed -i "s|tenantId:.*|tenantId: '${{ secrets.AZURE_TENANT_ID }}',|" src/environments/environment.prod.ts
+          sed -i "s|apiScope:.*|apiScope: '${{ secrets.API_SCOPE }}',|" src/environments/environment.prod.ts
       - name: Build Angular (production)
         run: npm run build
-        env:
-          ANGULAR_ENV_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ANGULAR_ENV_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          ANGULAR_ENV_API_URL:   ${{ secrets.API_URL }}
-          ANGULAR_ENV_API_SCOPE: ${{ secrets.API_SCOPE }}
 
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
