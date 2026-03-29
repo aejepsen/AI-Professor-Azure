@@ -70,7 +70,7 @@ async def exchange_token(body: TokenExchangeRequest):
 @app.post("/chat/stream")
 async def chat_stream(
     body: ChatRequest,
-    user: UserContext = Depends(verify_token),
+    request: Request = None,
 ):
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
