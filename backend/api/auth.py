@@ -54,7 +54,8 @@ async def verify_token(
             token,
             jwks,
             algorithms=["RS256"],
-            options={"verify_aud": False, "verify_iss": False},
+            audience=API_SCOPE,
+            issuer=f"https://sts.windows.net/{TENANT_ID}/",
         )
 
         user_id      = payload.get("oid") or payload.get("sub")
