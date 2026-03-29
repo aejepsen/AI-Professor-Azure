@@ -100,7 +100,7 @@ jobs:
           sed -i "s|tenantId:.*|tenantId: '${{ secrets.AZURE_TENANT_ID }}',|" src/environments/environment.prod.ts
           sed -i "s|apiScope:.*|apiScope: '${{ secrets.API_SCOPE }}',|" src/environments/environment.prod.ts
       - name: Build Angular (production)
-        run: npm run build
+        run: npm run build && cp staticwebapp.config.json dist/ai-professor-teams/browser/
 
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
