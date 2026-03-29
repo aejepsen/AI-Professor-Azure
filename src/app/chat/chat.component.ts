@@ -41,7 +41,7 @@ import { FeedbackComponent } from '../shared/feedback/feedback.component';
             [(ngModel)]="question"
             placeholder="Faça uma pergunta..."
             rows="1"
-            (keydown.enter)="onEnter($event)"
+            (keydown.enter)="onEnter($any($event))"
             [disabled]="(loading$ | async) === true"
           ></textarea>
           <button class="send-btn"
