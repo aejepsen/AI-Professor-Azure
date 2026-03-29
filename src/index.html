@@ -12,19 +12,6 @@
     Content Security Policy para Teams Tab Apps.
     Permite conexões apenas com domínios corporativos aprovados.
   -->
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src  'self' 'unsafe-inline' https://res.cdn.office.net;
-    style-src   'self' 'unsafe-inline' https://res.cdn.office.net;
-    font-src    'self' https://res.cdn.office.net;
-    img-src     'self' data: https://*.microsoft.com https://*.microsoftonline.com https://*.blob.core.windows.net;
-    connect-src 'self'
-                https://login.microsoftonline.com
-                https://graph.microsoft.com
-                https://api-ai-professor.empresa.com
-                https://*.search.windows.net;
-    frame-ancestors https://teams.microsoft.com https://teams.live.com;
-  ">
 </head>
 <body data-theme="default">
   <app-root></app-root>
