@@ -54,7 +54,7 @@ async def verify_token(
             token,
             jwks,
             algorithms=["RS256"],
-            audience=CLIENT_ID,
+            audience=[CLIENT_ID, "https://graph.microsoft.com"],
             issuer=f"https://sts.windows.net/{TENANT_ID}/",
         )
 
