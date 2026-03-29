@@ -1,6 +1,6 @@
 // src/app/app.routes.ts
 import { Routes } from '@angular/router';
-import { TeamsAuthGuard } from './core/auth/teams-auth.guard';
+import { MsalGuard } from '@azure/msal-angular';
 import { TabConfigComponent } from './tab-config/tab-config.component';
 import { AuthCallbackComponent } from './core/auth/auth-callback.component';
 
@@ -8,7 +8,7 @@ export const routes: Routes = [
   {
     path: '',
     loadComponent: () => import('./shell/shell.component').then(m => m.ShellComponent),
-    canActivate: [TeamsAuthGuard],
+    canActivate: [MsalGuard],
     children: [
       { path: '',          redirectTo: 'chat', pathMatch: 'full' },
       { path: 'chat',      loadComponent: () => import('./chat/chat.component').then(m => m.ChatComponent) },
