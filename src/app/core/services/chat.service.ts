@@ -1,8 +1,8 @@
 // src/app/core/services/chat.service.ts
 import { Injectable, inject } from '@angular/core';
-import { MsalService } from '@azure/msal-angular';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { MsalService } from '@azure/msal-angular';
 import { environment } from '../../../environments/environment';
 
 export interface Source {
@@ -43,51 +43,65 @@ export class ChatService {
   private msal = inject(MsalService);
   private base = environment.apiUrl;
 
+  private async getToken(): Promise<string> {
+    const account = this.msal.instance.getActiveAccount()
+      || this.msal.instance.getAllAccounts()[0];
+    if (!account) return '';
+    try {
+      const result = await this.msal.instance.acquireTokenSilent({
+        scopes: [environment.apiScope || 'User.Read'],
+        account,
+      });
+      return result.accessToken;
+    } catch (_) {
+      return '';
+    }
+  }
+
   streamAnswer(
     question: string,
     conversationId: string,
     history: { role: string; content: string }[] = [],
   ): Observable<any> {
     return new Observable(subscriber => {
-      const account = this.msal.instance.getActiveAccount() || this.msal.instance.getAllAccounts()[0];
-      let token = '';
-      try {
-        const result = await this.msal.instance.acquireTokenSilent({ scopes: [environment.apiScope || 'User.Read'], account });
-        token = result.accessToken;
-      } catch (_) {}
-      fetch(`${this.base}/chat/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ question, conversation_id: conversationId, history }),
-      }).then(async response => {
-        if (!response.ok || !response.body) {
-          subscriber.error(new Error(`HTTP ${response.status}`));
-          return;
-        }
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const chunk = JSON.parse(line.slice(6));
-                subscriber.next(chunk);
-                if (chunk.type === 'done' || chunk.type === 'error') {
-                  subscriber.complete();
-                  return;
-                }
-              } catch (_) {}
+      this.getToken().then(token => {
+        fetch(`${this.base}/chat/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ question, conversation_id: conversationId, history }),
+        }).then(async response => {
+          if (!response.ok || !response.body) {
+            subscriber.error(new Error(`HTTP ${response.status}`));
+            return;
+          }
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const chunk = JSON.parse(line.slice(6));
+                  subscriber.next(chunk);
+                  if (chunk.type === 'done' || chunk.type === 'error') {
+                    subscriber.complete();
+                    return;
+                  }
+                } catch (_) {}
+              }
             }
           }
-        }
-        subscriber.complete();
-      }).catch(err => subscriber.error(err));
+          subscriber.complete();
+        }).catch(err => subscriber.error(err));
+      });
     });
   }
 
