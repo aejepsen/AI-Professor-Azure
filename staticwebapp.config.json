@@ -2,5 +2,8 @@
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/assets/*", "/*.{css,js,ico,png,svg,woff,woff2}"]
+  },
+  "globalHeaders": {
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://ai-professor-prod-backend.agreeablemoss-d967faa4.eastus.azurecontainerapps.io https://login.microsoftonline.com https://graph.microsoft.com; img-src 'self' data:; font-src 'self' data:"
   }
 }
