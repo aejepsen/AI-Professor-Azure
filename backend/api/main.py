@@ -211,7 +211,7 @@ async def chat_eval(
     import anthropic as _anthropic
 
     expected_token = os.getenv("RAGAS_TEST_TOKEN", "")
-    auth_header = authorization or ""
+    auth_header = (request.headers.get("authorization") or request.headers.get("Authorization") or "") if request else ""
     token = auth_header.replace("Bearer ", "").strip()
 
     if expected_token and token != expected_token:
@@ -242,7 +242,7 @@ async def eval_search(
     import os
 
     expected_token = os.getenv("RAGAS_TEST_TOKEN", "")
-    auth_header = authorization or ""
+    auth_header = (request.headers.get("authorization") or request.headers.get("Authorization") or "") if request else ""
     token = auth_header.replace("Bearer ", "").strip()
 
     if expected_token and token != expected_token:
