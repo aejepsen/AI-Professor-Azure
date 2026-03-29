@@ -27,8 +27,8 @@ export function MSALInstanceFactory() {
     auth: {
       clientId: environment.clientId,
       authority: `https://login.microsoftonline.com/${environment.tenantId}`,
-      redirectUri: `${environment.teamsTabUrl}/auth`,
-      postLogoutRedirectUri: environment.teamsTabUrl,
+      redirectUri: window.location.origin + '/auth',
+      postLogoutRedirectUri: window.location.origin,
     },
     cache: {
       cacheLocation: BrowserCacheLocation.SessionStorage,
