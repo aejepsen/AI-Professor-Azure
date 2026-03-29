@@ -1,4 +1,3 @@
-// src/app/core/auth/auth-callback.component.ts
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -9,8 +8,7 @@ import { MsalService } from '@azure/msal-angular';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div style="display:flex;align-items:center;justify-content:center;height:100vh;
-                font-family:sans-serif;color:#666;">
+    <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#666;">
       <p>Autenticando...</p>
     </div>
   `,
@@ -21,6 +19,7 @@ export class AuthCallbackComponent implements OnInit {
 
   async ngOnInit() {
     try {
+      await this.msal.instance.initialize();
       await this.msal.instance.handleRedirectPromise();
       const accounts = this.msal.instance.getAllAccounts();
       if (accounts.length > 0) {
