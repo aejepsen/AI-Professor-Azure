@@ -4,31 +4,36 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
-export interface ChatMessage {
-  id:        string;
-  role:      'user' | 'assistant';
-  content:   string;
-  sources?:  Source[];
-  timestamp: string;
-  loading?:  boolean;
-  error?:    string;
-}
-
 export interface Source {
-  id:               string;
-  type:             string;
-  name:             string;
-  url:              string;
-  page?:            number;
+  id: string;
+  type: string;
+  name: string;
+  url: string;
+  page?: number;
   timestamp_start?: number;
-  timestamp_end?:   number;
-  relevance_score:  number;
+  timestamp_end?: number;
+  relevance_score: number;
+  sensitivity_label?: string;
 }
 
-export interface ChatRequest {
-  question:        string;
-  conversation_id: string;
-  history:         { role: string; content: string }[];
+export type AnswerSource = Source;
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: Source[];
+  timestamp: string;
+  loading?: boolean;
+  error?: string;
+}
+
+export interface ConversationHistory {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages: ChatMessage[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -42,31 +47,24 @@ export class ChatService {
     history: { role: string; content: string }[] = [],
   ): Observable<any> {
     return new Observable(subscriber => {
-      const url = `${this.base}/chat/stream`;
-      const body: ChatRequest = { question, conversation_id: conversationId, history };
-
-      fetch(url, {
+      fetch(`${this.base}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ question, conversation_id: conversationId, history }),
       }).then(async response => {
         if (!response.ok || !response.body) {
           subscriber.error(new Error(`HTTP ${response.status}`));
           return;
         }
-
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
-
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
@@ -87,9 +85,17 @@ export class ChatService {
 
   submitFeedback(messageId: string, positive: boolean, comment?: string) {
     return this.http.post(`${this.base}/chat/feedback`, {
-      message_id: messageId,
-      positive,
-      comment,
+      message_id: messageId, positive, comment,
     });
+  }
+
+  getHistory(page = 0, size = 20): Observable<ConversationHistory[]> {
+    return this.http.get<ConversationHistory[]>(
+      `${this.base}/conversations?page=${page}&size=${size}`
+    );
+  }
+
+  getConversation(id: string): Observable<ConversationHistory> {
+    return this.http.get<ConversationHistory>(`${this.base}/conversations/${id}`);
   }
 }

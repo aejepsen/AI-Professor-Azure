@@ -1,260 +1,131 @@
 // src/app/chat/chat.component.ts
-import {
-  Component, OnInit, OnDestroy, signal, computed,
-  inject, ElementRef, ViewChild, AfterViewChecked
-} from '@angular/core';
+import { Component, inject, signal, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, takeUntil } from 'rxjs';
-import { marked } from 'marked';
-import { ChatService, ChatMessage, AnswerSource } from '../core/services/chat.service';
-import { TeamsService } from '../core/services/teams.service';
-import { TeamsAuthService } from '../core/auth/teams-auth.service';
+import { Store } from '@ngrx/store';
+import { AppState } from '../core/store';
+import * as ChatActions from '../core/store/chat/chat.actions';
+import { ChatMessage, Source } from '../core/services/chat.service';
 import { SourcePanelComponent } from '../shared/source-panel/source-panel.component';
 import { FeedbackComponent } from '../shared/feedback/feedback.component';
-
-function uuid(): string {
-  return crypto.randomUUID();
-}
-
-interface UiMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;           // markdown string, streamed progressively
-  sources: AnswerSource[];
-  timestamp: Date;
-  streaming: boolean;
-  error: boolean;
-}
 
 @Component({
   selector: 'app-chat',
   standalone: true,
   imports: [CommonModule, FormsModule, SourcePanelComponent, FeedbackComponent],
   template: `
-    <div class="chat-shell" [attr.data-theme]="teams.theme()">
-
-      <!-- ── Message List ── -->
-      <div class="messages-area" #messagesArea>
-        <div *ngIf="messages().length === 0" class="empty-state">
-          <div class="empty-icon">🎓</div>
-          <h2>Como posso ajudar?</h2>
-          <p>Pergunte sobre processos, políticas, encontre trechos de vídeos ou documentos.</p>
-          <div class="suggestions">
-            <button *ngFor="let s of suggestions" class="suggestion-chip" (click)="send(s)">
-              {{ s }}
-            </button>
-          </div>
+    <div class="chat-container">
+      <div class="messages" #messagesEl>
+        <div class="welcome" *ngIf="(messages$ | async)?.length === 0">
+          <div class="welcome-icon">🎓</div>
+          <h2>AI Professor</h2>
+          <p>Seu assistente de conhecimento corporativo. Faça uma pergunta sobre políticas, processos ou documentos da empresa.</p>
         </div>
-
-        <div *ngFor="let msg of messages(); trackBy: trackById" class="message-row" [class]="msg.role">
-
-          <!-- User message -->
-          <div *ngIf="msg.role === 'user'" class="bubble user-bubble">
-            <span class="avatar user-avatar">
-              {{ userInitials() }}
-            </span>
-            <p class="message-text">{{ msg.content }}</p>
-          </div>
-
-          <!-- Assistant message -->
-          <div *ngIf="msg.role === 'assistant'" class="bubble assistant-bubble">
-            <span class="avatar bot-avatar">🎓</span>
-            <div class="message-body">
-              <div class="message-text markdown-body"
-                   [innerHTML]="renderMarkdown(msg.content)">
-              </div>
-
-              <!-- Typing indicator while streaming -->
-              <div *ngIf="msg.streaming" class="typing-indicator">
-                <span></span><span></span><span></span>
-              </div>
-
-              <!-- Sources panel -->
-              <app-source-panel
-                *ngIf="!msg.streaming && msg.sources.length > 0"
-                [sources]="msg.sources"
-                (openVideo)="onOpenVideo($event)"
-                (openDoc)="onOpenDoc($event)">
-              </app-source-panel>
-
-              <!-- Feedback -->
-              <app-feedback
-                *ngIf="!msg.streaming && !msg.error"
-                [messageId]="msg.id"
-                (feedback)="onFeedback($event)">
-              </app-feedback>
+        <div class="message-wrapper" *ngFor="let msg of messages$ | async" [class]="msg.role">
+          <div class="message-bubble">
+            <div class="message-content" [class.loading]="msg.loading">
+              {{ msg.content }}
+              <span class="cursor" *ngIf="msg.loading">▋</span>
             </div>
+            <div class="message-error" *ngIf="msg.error">⚠️ {{ msg.error }}</div>
+            <app-source-panel *ngIf="msg.sources?.length" [sources]="msg.sources!" />
+            <app-feedback *ngIf="msg.role === 'assistant' && !msg.loading && msg.content"
+              [messageId]="msg.id" />
           </div>
         </div>
       </div>
 
-      <!-- ── Input Bar ── -->
-      <div class="input-bar">
-        <textarea
-          #inputEl
-          [(ngModel)]="question"
-          (keydown.enter)="onEnter($event)"
-          [disabled]="isStreaming()"
-          placeholder="Digite sua pergunta... (Enter para enviar, Shift+Enter para nova linha)"
-          rows="1"
-          class="question-input"
-          (input)="autoResize($event)">
-        </textarea>
-        <button
-          class="send-btn"
-          [disabled]="!question.trim() || isStreaming()"
-          (click)="send(question)">
-          <span *ngIf="!isStreaming()">➤</span>
-          <span *ngIf="isStreaming()" class="spinner"></span>
-        </button>
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea
+            [(ngModel)]="question"
+            placeholder="Faça uma pergunta..."
+            rows="1"
+            (keydown.enter)="onEnter($event)"
+            [disabled]="(loading$ | async) === true"
+          ></textarea>
+          <button class="send-btn"
+            (click)="send()"
+            [disabled]="!question.trim() || (loading$ | async) === true">
+            <span *ngIf="!(loading$ | async)">➤</span>
+            <span *ngIf="loading$ | async" class="spinner">⟳</span>
+          </button>
+        </div>
+        <div class="input-footer">
+          <span>Enter para enviar · Shift+Enter para nova linha</span>
+          <button class="clear-btn" (click)="clear()">Limpar conversa</button>
+        </div>
       </div>
-
     </div>
   `,
-  styleUrls: ['./chat.component.scss'],
+  styles: [`
+    .chat-container { display: flex; flex-direction: column; height: calc(100vh - 52px); }
+    .messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+    .welcome { text-align: center; margin: auto; max-width: 480px; padding: 48px 24px; }
+    .welcome-icon { font-size: 48px; margin-bottom: 16px; }
+    .welcome h2 { font-size: 24px; font-weight: 700; color: #1a73e8; margin: 0 0 8px; }
+    .welcome p { color: #666; line-height: 1.6; margin: 0; }
+    .message-wrapper { display: flex; }
+    .message-wrapper.user { justify-content: flex-end; }
+    .message-wrapper.assistant { justify-content: flex-start; }
+    .message-bubble { max-width: 72%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.6; }
+    .user .message-bubble { background: #1a73e8; color: #fff; border-bottom-right-radius: 4px; }
+    .assistant .message-bubble { background: #fff; color: #333; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .message-content.loading { opacity: 0.8; }
+    .cursor { animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    .message-error { color: #d32f2f; font-size: 12px; margin-top: 6px; }
+    .input-area { padding: 16px 24px; background: #fff; border-top: 1px solid #e8eaed; }
+    .input-wrapper { display: flex; gap: 8px; align-items: flex-end; }
+    textarea { flex: 1; padding: 12px 16px; border: 1px solid #dadce0; border-radius: 24px; font-size: 14px; resize: none; outline: none; font-family: inherit; line-height: 1.5; max-height: 120px; }
+    textarea:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+    .send-btn { width: 44px; height: 44px; border-radius: 50%; background: #1a73e8; color: #fff; border: none; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+    .send-btn:hover:not(:disabled) { background: #1557b0; transform: scale(1.05); }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .spinner { animation: spin 1s linear infinite; display: inline-block; }
+    @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    .input-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11px; color: #888; }
+    .clear-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 11px; padding: 0; }
+    .clear-btn:hover { color: #d32f2f; }
+  `],
 })
-export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
-  @ViewChild('messagesArea') messagesArea!: ElementRef<HTMLDivElement>;
-  @ViewChild('inputEl')      inputEl!: ElementRef<HTMLTextAreaElement>;
+export class ChatComponent implements AfterViewChecked {
+  private store = inject(Store<AppState>);
+  @ViewChild('messagesEl') messagesEl!: ElementRef;
 
-  private chatSvc  = inject(ChatService);
-  readonly teams   = inject(TeamsService);
-  private auth     = inject(TeamsAuthService);
-  private destroy$ = new Subject<void>();
+  messages$ = this.store.select(s => s.chat.messages);
+  loading$  = this.store.select(s => s.chat.loading);
+  question  = '';
 
-  messages    = signal<UiMessage[]>([]);
-  isStreaming = signal(false);
-  question    = '';
-  conversationId = uuid();
+  private conversationId = crypto.randomUUID();
 
-  userInitials = computed(() => {
-    const name = this.auth.profile()?.displayName ?? 'U';
-    return name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
-  });
+  ngAfterViewChecked() {
+    if (this.messagesEl) {
+      const el = this.messagesEl.nativeElement;
+      el.scrollTop = el.scrollHeight;
+    }
+  }
 
-  suggestions = [
-    'Como abrir um chamado de TI?',
-    'Qual é a política de reembolso de despesas?',
-    'Em que minuto do vídeo de onboarding falam sobre férias?',
-    'Quais são os passos do processo de aprovação de compras?',
-  ];
-
-  private shouldScrollToBottom = false;
-
-  ngOnInit() {}
+  send() {
+    const q = this.question.trim();
+    if (!q) return;
+    this.question = '';
+    this.store.dispatch(ChatActions.sendMessage({ question: q, conversationId: this.conversationId }));
+  }
 
   onEnter(event: KeyboardEvent) {
     if (!event.shiftKey) {
       event.preventDefault();
-      this.send(this.question);
+      this.send();
     }
   }
 
-  send(text: string) {
-    const q = text.trim();
-    if (!q || this.isStreaming()) return;
-    this.question = '';
-
-    const userMsg: UiMessage = {
-      id: uuid(), role: 'user', content: q,
-      sources: [], timestamp: new Date(),
-      streaming: false, error: false,
-    };
-    const botMsg: UiMessage = {
-      id: uuid(), role: 'assistant', content: '',
-      sources: [], timestamp: new Date(),
-      streaming: true, error: false,
-    };
-
-    this.messages.update(m => [...m, userMsg, botMsg]);
-    this.isStreaming.set(true);
-    this.shouldScrollToBottom = true;
-
-    this.chatSvc
-      .streamAnswer(q, this.conversationId, this.toHistory())
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: chunk => {
-          if (chunk.type === 'token') {
-            this.messages.update(msgs =>
-              msgs.map(m => m.id === botMsg.id
-                ? { ...m, content: m.content + (chunk.text ?? '') }
-                : m
-              )
-            );
-            this.shouldScrollToBottom = true;
-          }
-          if (chunk.type === 'sources') {
-            this.messages.update(msgs =>
-              msgs.map(m => m.id === botMsg.id
-                ? { ...m, sources: chunk.sources ?? [] }
-                : m
-              )
-            );
-          }
-          if (chunk.type === 'error') {
-            this.messages.update(msgs =>
-              msgs.map(m => m.id === botMsg.id
-                ? { ...m, content: chunk.error ?? 'Erro ao processar resposta.', streaming: false, error: true }
-                : m
-              )
-            );
-            this.isStreaming.set(false);
-          }
-        },
-        complete: () => {
-          this.messages.update(msgs =>
-            msgs.map(m => m.id === botMsg.id ? { ...m, streaming: false } : m)
-          );
-          this.isStreaming.set(false);
-        },
-      });
+  onFeedback(data: { messageId: string; positive: boolean }) {
+    // Handled by FeedbackComponent internally
   }
 
-  renderMarkdown(content: string): string {
-    return marked(content) as string;
-  }
-
-  onOpenVideo(source: AnswerSource) {
-    this.teams.openVideoAtTimestamp(source.url, source.timestamp_start ?? 0);
-  }
-
-  onOpenDoc(source: AnswerSource) {
-    this.teams.openFileDeepLink(source.url, source.name);
-  }
-
-  onFeedback(event: { messageId: string; positive: boolean }) {
-    this.chatSvc.submitFeedback(event.messageId, event.positive)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe();
-  }
-
-  trackById = (_: number, msg: UiMessage) => msg.id;
-
-  autoResize(event: Event) {
-    const el = event.target as HTMLTextAreaElement;
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
-  }
-
-  ngAfterViewChecked() {
-    if (this.shouldScrollToBottom) {
-      const el = this.messagesArea?.nativeElement;
-      if (el) el.scrollTop = el.scrollHeight;
-      this.shouldScrollToBottom = false;
-    }
-  }
-
-  private toHistory(): ChatMessage[] {
-    return this.messages().map(m => ({
-      id: m.id, role: m.role, content: m.content,
-      sources: m.sources, timestamp: m.timestamp,
-    }));
-  }
-
-  ngOnDestroy() {
-    this.destroy$.next();
-    this.destroy$.complete();
+  clear() {
+    this.store.dispatch(ChatActions.clearHistory());
+    this.conversationId = crypto.randomUUID();
   }
 }
