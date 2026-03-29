@@ -1,5 +1,6 @@
 // src/app/core/services/chat.service.ts
 import { Injectable, inject } from '@angular/core';
+import { MsalService } from '@azure/msal-angular';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -39,6 +40,7 @@ export interface ConversationHistory {
 @Injectable({ providedIn: 'root' })
 export class ChatService {
   private http = inject(HttpClient);
+  private msal = inject(MsalService);
   private base = environment.apiUrl;
 
   streamAnswer(
@@ -47,9 +49,15 @@ export class ChatService {
     history: { role: string; content: string }[] = [],
   ): Observable<any> {
     return new Observable(subscriber => {
+      const account = this.msal.instance.getActiveAccount() || this.msal.instance.getAllAccounts()[0];
+      let token = '';
+      try {
+        const result = await this.msal.instance.acquireTokenSilent({ scopes: [environment.apiScope || 'User.Read'], account });
+        token = result.accessToken;
+      } catch (_) {}
       fetch(`${this.base}/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ question, conversation_id: conversationId, history }),
       }).then(async response => {
         if (!response.ok || !response.body) {
