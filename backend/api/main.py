@@ -10,7 +10,7 @@ import asyncio
 from datetime import datetime
 from typing import AsyncGenerator, Optional
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
