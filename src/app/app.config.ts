@@ -8,7 +8,7 @@ import { provideEffects } from '@ngrx/effects';
 import { provideStoreDevtools } from '@ngrx/store-devtools';
 import {
   MsalModule, MsalInterceptor,
-  MSAL_INSTANCE, MSAL_INTERCEPTOR_CONFIG,
+  MSAL_INSTANCE, MSAL_INTERCEPTOR_CONFIG, MSAL_GUARD_CONFIG,
   MsalService, MsalGuard, MsalBroadcastService
 } from '@azure/msal-angular';
 import {
@@ -47,6 +47,13 @@ export function MSALInterceptorConfigFactory() {
   };
 }
 
+export function MSALGuardConfigFactory() {
+  return {
+    interactionType: InteractionType.Redirect,
+    authRequest: { scopes: ["User.Read"] },
+  };
+}
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes, withViewTransitions()),
@@ -58,6 +65,7 @@ export const appConfig: ApplicationConfig = {
 
     // MSAL
     { provide: MSAL_INSTANCE, useFactory: MSALInstanceFactory },
+    { provide: MSAL_GUARD_CONFIG, useFactory: MSALGuardConfigFactory },
     { provide: MSAL_INTERCEPTOR_CONFIG, useFactory: MSALInterceptorConfigFactory },
     MsalService,
     MsalGuard,
