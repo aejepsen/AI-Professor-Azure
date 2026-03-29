@@ -14,7 +14,7 @@ EVAL_DATASET = [
 METRICS = ["faithfulness", "answer_relevancy", "context_recall", "context_precision", "answer_correctness"]
 
 PROMPTS = {
-    "faithfulness": "Score 0.0-1.0: how much of the response is supported by the context?\nContext: {context}\nResponse: {answer}\nReply with ONLY a decimal number.",
+    "faithfulness": "Rate faithfulness 0.0 to 1.0. Just output the number?\nContext: {context}\nResponse: {answer}\nReply with ONLY a decimal number.",
     "answer_relevancy": "Score 0.0-1.0: how relevant is the response to the question?\nQuestion: {question}\nResponse: {answer}\nReply with ONLY a decimal number.",
     "context_recall": "Score 0.0-1.0: how much of the ground truth is covered by the context?\nContext: {context}\nGround truth: {ground_truth}\nReply with ONLY a decimal number.",
     "context_precision": "Score 0.0-1.0: how precise is the context for the question?\nQuestion: {question}\nContext: {context}\nReply with ONLY a decimal number.",
