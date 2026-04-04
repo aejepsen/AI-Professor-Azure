@@ -75,6 +75,10 @@ resource "azurerm_container_app" "backend" {
     name  = "ragas-test-token"
     value = var.ragas_test_token
   }
+  secret {
+    name  = "assemblyai-key"
+    value = var.assemblyai_api_key
+  }
 
   template {
     min_replicas = 0 # scale-to-zero → custo zero quando inativo
@@ -110,6 +114,10 @@ resource "azurerm_container_app" "backend" {
       env {
         name        = "RAGAS_TEST_TOKEN"
         secret_name = "ragas-test-token"
+      }
+      env {
+        name        = "ASSEMBLYAI_API_KEY"
+        secret_name = "assemblyai-key"
       }
 
       liveness_probe {

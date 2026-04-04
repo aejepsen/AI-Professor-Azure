@@ -121,6 +121,7 @@ jobs:
           TF_VAR_qdrant_url: ${{ secrets.QDRANT_URL }}
           TF_VAR_qdrant_api_key: ${{ secrets.QDRANT_API_KEY }}
           TF_VAR_ragas_test_token: ${{ secrets.RAGAS_TEST_TOKEN }}
+          TF_VAR_assemblyai_api_key: ${{ secrets.ASSEMBLYAI_API_KEY }}
           TF_VAR_ghcr_username: ${{ secrets.GHCR_USERNAME }}
           TF_VAR_ghcr_token: ${{ secrets.GHCR_TOKEN }}
         run: terraform plan -detailed-exitcode -out=tfplan || [ $? -eq 2 ]
