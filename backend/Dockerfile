@@ -13,8 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Código copiado como submódulo 'backend' — preserva os imports existentes
 COPY . ./backend/
 
-# Pré-download do modelo de embeddings — elimina download no cold start
+# Pré-download de todos os modelos — elimina downloads no cold start
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-large')" \
+    && python -c "from fastembed.sparse.bm25 import Bm25; list(Bm25('Qdrant/bm25').embed(['warmup']))" \
     && find /root/.cache/huggingface -name "*.msgpack" -delete 2>/dev/null || true \
     && find /root/.cache/huggingface -name "flax_model*" -delete 2>/dev/null || true \
     && find /root/.cache/huggingface -name "tf_model*" -delete 2>/dev/null || true \
@@ -23,7 +24,7 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 # Usuário não-root (segurança)
 RUN useradd -m appuser \
     && chown -R appuser /app \
-    && chown -R appuser /root/.cache/huggingface 2>/dev/null || true
+    && chown -R appuser /root/.cache 2>/dev/null || true
 USER appuser
 
 EXPOSE 8000
