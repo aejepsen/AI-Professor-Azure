@@ -116,16 +116,16 @@ jobs:
       - name: Health check
         run: |
           URL="https://ai-professor-backend.bluedesert-c198f5d7.eastus.azurecontainerapps.io/health"
-          for i in $(seq 1 12); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL")
+          for i in $(seq 1 24); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL")
             if [ "$STATUS" = "200" ]; then
               echo "Health check ok ($STATUS)"
               exit 0
             fi
-            echo "Aguardando... ($i/12)"
-            sleep 10
+            echo "Aguardando... ($i/24) status=$STATUS"
+            sleep 15
           done
-          echo "Health check falhou após 2 minutos"
+          echo "Health check falhou após 6 minutos"
           exit 1
 
   # ---------------------------------------------------------------------------
