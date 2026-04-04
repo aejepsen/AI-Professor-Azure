@@ -1,6 +1,6 @@
 # =============================================================================
-# CI — Pull Request
-# Roda em todo PR para main:
+# CI — Branch developer + Pull Request para main
+# Roda em push para developer e em todo PR para main:
 #   1. Testes Python (unit + integration)
 #   2. Build Docker (smoke test)
 #   3. Terraform fmt + validate + plan
@@ -8,6 +8,11 @@
 name: CI
 
 on:
+  push:
+    branches: [developer]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
 
