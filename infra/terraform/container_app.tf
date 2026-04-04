@@ -87,8 +87,8 @@ resource "azurerm_container_app" "backend" {
     container {
       name   = "backend"
       image  = var.container_image
-      cpu    = 0.5
-      memory = "1Gi"
+      cpu    = 2.0
+      memory = "4Gi"
 
       # Env vars referenciam secrets — valores nunca em texto claro
       env {
