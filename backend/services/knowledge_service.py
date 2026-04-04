@@ -4,7 +4,7 @@ from typing import Any
 import structlog
 from fastembed.sparse.bm25 import Bm25
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import Fusion, Prefetch, SparseVector
+from qdrant_client.http.models import SparseVector
 from sentence_transformers import SentenceTransformer
 
 from backend.core.config import settings
@@ -48,22 +48,43 @@ class KnowledgeService:
             values=q_sparse_raw.values.tolist(),
         )
 
-        results = self._client.query_points(
+        fetch_limit = top_k * 3
+        dense_hits = self._client.query_points(
             collection_name=COLLECTION_NAME,
-            prefetch=[
-                Prefetch(query=q_dense, using="dense", limit=top_k * 3),
-                Prefetch(query=q_sparse, using="sparse", limit=top_k * 3),
-            ],
-            query=Fusion.RRF,
-            limit=top_k,
+            query=q_dense,
+            using="dense",
+            limit=fetch_limit,
+            with_payload=True,
+        ).points
+        sparse_hits = self._client.query_points(
+            collection_name=COLLECTION_NAME,
+            query=q_sparse,
+            using="sparse",
+            limit=fetch_limit,
             with_payload=True,
         ).points
 
+        # RRF manual (k=60)
+        k = 60
+        scores: dict[str, float] = {}
+        payloads: dict[str, dict] = {}
+
+        for rank, hit in enumerate(dense_hits):
+            sid = str(hit.id)
+            scores[sid] = scores.get(sid, 0.0) + 1 / (k + rank + 1)
+            payloads[sid] = hit.payload or {}
+
+        for rank, hit in enumerate(sparse_hits):
+            sid = str(hit.id)
+            scores[sid] = scores.get(sid, 0.0) + 1 / (k + rank + 1)
+            payloads[sid] = hit.payload or {}
+
+        top_ids = sorted(scores, key=lambda x: scores[x], reverse=True)[:top_k]
         return [
             {
-                "text": hit.payload.get("text", "") if hit.payload else "",
-                "source": hit.payload.get("source", "") if hit.payload else "",
-                "score": hit.score,
+                "text": payloads[sid].get("text", ""),
+                "source": payloads[sid].get("source", ""),
+                "score": scores[sid],
             }
-            for hit in results
+            for sid in top_ids
         ]
