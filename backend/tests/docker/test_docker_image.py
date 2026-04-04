@@ -46,6 +46,7 @@ def docker_container():
             "-e", "AZURE_TENANT_ID=test-tenant",
             "-e", "AZURE_CLIENT_ID=test-client",
             "-e", "RAGAS_TEST_TOKEN=test-ragas-token",
+            "-e", "ASSEMBLYAI_API_KEY=fake-assemblyai-key",
             IMAGE_TAG,
         ],
         capture_output=True,

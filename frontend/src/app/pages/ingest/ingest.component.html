@@ -1,0 +1,28 @@
+<div class="ingest">
+  <div
+    class="ingest__drop"
+    [class.ingest__drop--loading]="loading"
+    (drop)="onDrop($event)"
+    (dragover)="onDragOver($event)"
+  >
+    @if (loading) {
+      <div class="ingest__spinner"></div>
+      <p>Processando...</p>
+    } @else if (success) {
+      <div class="ingest__success">
+        <p>✓ <strong>{{ filename }}</strong> indexado com <strong>{{ nChunks }}</strong> chunks.</p>
+      </div>
+    } @else {
+      <label class="ingest__label">
+        <input type="file" hidden accept=".mkv,.mp4,.mp3,.wav,.m4a,.webm" (change)="onFileSelected($any($event.target).files[0])">
+        <span class="ingest__icon">⬆</span>
+        <span>Arraste um vídeo/áudio ou clique para selecionar</span>
+        <small>.mkv · .mp4 · .mp3 · .wav · .m4a · .webm · max 500 MB</small>
+      </label>
+    }
+  </div>
+
+  @if (error) {
+    <p class="ingest__error">{{ error }}</p>
+  }
+</div>

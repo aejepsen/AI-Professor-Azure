@@ -1,0 +1,16 @@
+<nav class="nav">
+  <a class="nav__brand" routerLink="/chat">AI Professor</a>
+
+  <div class="nav__links">
+    <a routerLink="/chat" routerLinkActive="active">Chat</a>
+    <a routerLink="/ingest" routerLinkActive="active">Upload</a>
+  </div>
+
+  <div class="nav__auth">
+    @if (auth.isLoggedIn()) {
+      <button data-testid="btn-logout" (click)="auth.logout()">Sair</button>
+    } @else {
+      <button data-testid="btn-login" (click)="auth.login()">Entrar</button>
+    }
+  </div>
+</nav>
