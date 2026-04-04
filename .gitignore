@@ -1,35 +1,37 @@
-# Credenciais e segredos
+# Secrets
 .env
 *.env
-
-# Terraform
-**/.terraform/
+*.tfvars
+prod.tfvars
 *.tfstate
 *.tfstate.backup
-tfplan
-*.tfvars
-.terraform.lock.hcl
 
-# Node
-node_modules/
-dist/
+# Terraform
+.terraform/
+.terraform.lock.hcl
+tfplan
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
+venv/
 *.egg-info/
+dist/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# Logs
-*.log
-
-# OS
-.DS_Store
-Thumbs.db
+# Node / Angular
+node_modules/
+dist/
+.angular/
 
 # IDE
-.vscode/settings.json
+.vscode/
 .idea/
+*.swp
 
-# Documento de deploy (contém dados sensiveis)
-AI_Professor_Azure_Deploy.docx
+# Docker
+*.log

@@ -1,0 +1,21 @@
+# =============================================================================
+# Imagem customizada: Terraform + Azure CLI
+# Permite autenticação via az login (sem Service Principal local)
+# Base: mcr.microsoft.com/azure-cli (Azure Linux) — mesma versão do host
+# O entrypoint copia apenas os arquivos JSON de auth, isolando o cache binário
+# =============================================================================
+FROM mcr.microsoft.com/azure-cli:2.84.0
+
+ARG TERRAFORM_VERSION=1.7.5
+
+RUN tdnf install -y wget unzip ca-certificates && \
+    wget -q "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
+    unzip "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
+    mv terraform /usr/local/bin/terraform && \
+    rm "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
+    tdnf clean all
+
+COPY terraform-entrypoint.sh /usr/local/bin/terraform-entrypoint.sh
+RUN chmod +x /usr/local/bin/terraform-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/terraform-entrypoint.sh"]

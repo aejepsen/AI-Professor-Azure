@@ -1,0 +1,23 @@
+# =============================================================================
+# Exemplo de prod.tfvars — copie para prod.tfvars e preencha os valores reais
+# NUNCA commite prod.tfvars (está no .gitignore)
+# =============================================================================
+
+subscription_id     = "00000000-0000-0000-0000-000000000000"
+tenant_id           = "00000000-0000-0000-0000-000000000000"
+resource_group_name = "ai-professor-prod-rg"
+location            = "eastus"
+environment         = "prod"
+
+# Secrets do backend
+anthropic_api_key   = "sk-ant-..."
+qdrant_url          = "https://xxxx.us-east-1-1.aws.cloud.qdrant.io"
+qdrant_api_key      = "eyJ..."
+ragas_test_token    = "token-fixo-para-ci"
+
+# ghcr.io
+ghcr_username       = "seu-usuario-github"
+ghcr_token          = "ghp_..."  # PAT com read:packages
+
+# Container image
+container_image     = "ghcr.io/seu-usuario/ai-professor-backend:latest"

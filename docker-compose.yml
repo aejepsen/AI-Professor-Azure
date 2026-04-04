@@ -1,0 +1,100 @@
+# =============================================================================
+# AI Professor v1 — Docker Compose
+# Terraform roda em container com az cli — sem instalação local, versão fixada
+# Autenticação via az login (credenciais em ~/.azure montado no container)
+# Todos os secrets lidos do .env via TF_VAR_* (sem prod.tfvars)
+#
+# PRÉ-REQUISITO: az login (executar uma vez na máquina host)
+#
+# Ciclo TDD Terraform (executar nesta ordem):
+#
+#   ETAPA 1 — Validação estática (sem conexão Azure, roda em segundos):
+#     docker compose run --rm terraform-fmt        # formata e verifica estilo
+#     docker compose run --rm terraform-validate   # valida sintaxe e referências
+#
+#   ETAPA 2 — Validação com Azure (requer az login, mostra o que será criado):
+#     docker compose run --rm terraform init       # inicializa backend e providers
+#     docker compose run --rm terraform-plan       # mostra recursos a criar (red→green)
+#
+#   ETAPA 3 — Terratest (provisiona real, valida, destroi — rodar uma vez):
+#     cd infra/terratest && go test -v -timeout 30m -run TestAIProfessorInfra
+#
+#   ETAPA 4 — Apply (somente após plan aprovado manualmente):
+#     docker compose run --rm terraform-apply
+#
+#   DESTROY (emergência):
+#     docker compose run --rm terraform-destroy
+# =============================================================================
+
+x-terraform-base: &terraform-base
+  build:
+    context: ./infra
+    dockerfile: Dockerfile.terraform
+  working_dir: /workspace
+  volumes:
+    - ./infra/terraform:/workspace
+    - ${HOME}/.azure:/root/.azure-host:ro # auth do host (read-only) — entrypoint copia para /tmp
+  env_file:
+    - .env
+  environment:
+    - ARM_SUBSCRIPTION_ID
+    - ARM_TENANT_ID
+    - ARM_CLIENT_ID=        # vazio → Terraform usa az cli auth via ~/.azure
+    - ARM_CLIENT_SECRET=    # vazio → Terraform usa az cli auth via ~/.azure
+    - ARM_ACCESS_KEY        # Storage Account key para o backend Terraform
+    - TF_VAR_subscription_id=${ARM_SUBSCRIPTION_ID}
+    - TF_VAR_tenant_id=${ARM_TENANT_ID}
+    - TF_VAR_anthropic_api_key=${ANTHROPIC_API_KEY}
+    - TF_VAR_qdrant_url=${QDRANT_URL}
+    - TF_VAR_qdrant_api_key=${QDRANT_API_KEY}
+    - TF_VAR_ragas_test_token=${RAGAS_TEST_TOKEN}
+    - TF_VAR_ghcr_username=${GHCR_USERNAME}
+    - TF_VAR_ghcr_token=${GHCR_TOKEN}
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 1a — Formata o código e verifica estilo (sem Azure, sem init)
+  # Falha se algum arquivo não estiver formatado corretamente
+  # ---------------------------------------------------------------------------
+  terraform-fmt:
+    <<: *terraform-base
+    command: fmt -check -recursive -diff
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 1b — Valida sintaxe, tipos e referências (sem Azure, sem init)
+  # Falha se variáveis não declaradas, recursos inválidos, referências quebradas
+  # Requer .terraform/ local (init já executado ao menos uma vez)
+  # ---------------------------------------------------------------------------
+  terraform-validate:
+    <<: *terraform-base
+    command: validate
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 2 — Init (inicializa backend remoto e baixa providers)
+  # ---------------------------------------------------------------------------
+  terraform:
+    <<: *terraform-base
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 2 — Plan (mostra exatamente o que será criado/alterado/destruído)
+  # Gate obrigatório antes do apply — revisar output antes de prosseguir
+  # Falha se qualquer recurso inesperado aparecer no diff
+  # ---------------------------------------------------------------------------
+  terraform-plan:
+    <<: *terraform-base
+    command: plan -detailed-exitcode -out=tfplan
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 4 — Apply (somente após plan revisado e aprovado)
+  # ---------------------------------------------------------------------------
+  terraform-apply:
+    <<: *terraform-base
+    command: apply tfplan
+
+  # ---------------------------------------------------------------------------
+  # Destroy — apaga toda a infraestrutura
+  # ---------------------------------------------------------------------------
+  terraform-destroy:
+    <<: *terraform-base
+    command: destroy -auto-approve
