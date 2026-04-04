@@ -117,7 +117,7 @@ jobs:
         run: |
           URL="https://ai-professor-backend.bluedesert-c198f5d7.eastus.azurecontainerapps.io/health"
           for i in $(seq 1 24); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$URL" || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Health check ok ($STATUS)"
               exit 0
