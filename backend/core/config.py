@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     azure_tenant_id: str
     azure_client_id: str
     ragas_test_token: str
+    assemblyai_api_key: str
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

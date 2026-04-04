@@ -46,6 +46,7 @@ jobs:
           AZURE_TENANT_ID: test-tenant
           AZURE_CLIENT_ID: test-client
           RAGAS_TEST_TOKEN: test-ragas-token
+          ASSEMBLYAI_API_KEY: fake-assemblyai-key
         run: pytest tests/unit/ tests/integration/ -v --tb=short
 
   # ---------------------------------------------------------------------------
@@ -71,6 +72,7 @@ jobs:
           AZURE_TENANT_ID: test-tenant
           AZURE_CLIENT_ID: test-client
           RAGAS_TEST_TOKEN: test-ragas-token
+          ASSEMBLYAI_API_KEY: fake-assemblyai-key
         run: pytest tests/docker/ -v -m docker --tb=short
 
   # ---------------------------------------------------------------------------
