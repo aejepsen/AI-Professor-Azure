@@ -82,7 +82,28 @@ def test_search_qdrant_error_raises(service, mock_qdrant):
 
 
 def test_search_limits_results(service, mock_qdrant):
-    """Busca deve chamar Qdrant com limite configurado."""
-    service.search("test query", top_k=5)
+    """Busca deve respeitar top_k — retorna no máximo N resultados via RRF."""
+    hits = [_make_hit(f"texto {i}", f"fonte_{i}.pdf", score=0.9 - i * 0.1) for i in range(10)]
+    mock_qdrant.query_points.return_value = _query_points_result(hits)
 
-    assert mock_qdrant.query_points.called
+    results = service.search("test query", top_k=3)
+
+    assert len(results) <= 3
+
+
+def test_search_rrf_merges_dense_and_sparse(service, mock_qdrant):
+    """Hit que aparece em dense e sparse deve ter score RRF maior que hit exclusivo."""
+    shared_hit = _make_hit("texto compartilhado", "fonte.pdf")
+    exclusive_hit = _make_hit("texto exclusivo", "outro.pdf")
+
+    # Primeira chamada (dense): shared + exclusive
+    # Segunda chamada (sparse): só shared
+    mock_qdrant.query_points.side_effect = [
+        _query_points_result([shared_hit, exclusive_hit]),
+        _query_points_result([shared_hit]),
+    ]
+
+    results = service.search("query teste", top_k=2)
+
+    # shared deve aparecer primeiro (score RRF maior)
+    assert results[0]["text"] == "texto compartilhado"
