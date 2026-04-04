@@ -1,0 +1,52 @@
+.nav {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0 1.5rem;
+  height: 60px;
+  background: rgba(15, 17, 23, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+
+  &__brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: var(--teal);
+    text-decoration: none;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+  }
+
+  &__links {
+    display: flex;
+    gap: 1rem;
+    flex: 1;
+
+    a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+
+      &:hover, &.active { color: var(--text); }
+    }
+  }
+
+  &__auth {
+    button {
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: var(--teal-dim);
+      color: var(--teal);
+      border: 1px solid var(--teal-border);
+      transition: background 0.2s;
+
+      &:hover { background: rgba(0, 229, 200, 0.2); }
+    }
+  }
+}

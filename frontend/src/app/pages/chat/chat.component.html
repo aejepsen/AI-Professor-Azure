@@ -1,0 +1,22 @@
+<div class="chat">
+  <div class="chat__messages" #messagesContainer>
+    @for (msg of messages; track $index) {
+      <div class="chat__bubble" [class.chat__bubble--user]="msg.role === 'user'" [class.chat__bubble--assistant]="msg.role === 'assistant'">
+        <span class="chat__role">{{ msg.role === 'user' ? 'Você' : 'Professor' }}</span>
+        <p class="chat__text" [innerHTML]="msg.text"></p>
+      </div>
+    }
+  </div>
+
+  <form class="chat__form" (submit)="$event.preventDefault(); send()">
+    <textarea
+      class="chat__input"
+      [(ngModel)]="query"
+      name="query"
+      placeholder="Faça uma pergunta sobre a aula..."
+      rows="2"
+      (keydown.enter)="$event.preventDefault(); send()"
+    ></textarea>
+    <button class="chat__send" type="submit" [disabled]="!query.trim()">Enviar</button>
+  </form>
+</div>

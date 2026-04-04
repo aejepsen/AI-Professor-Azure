@@ -53,12 +53,18 @@ def mock_settings_env(monkeypatch):
     monkeypatch.setenv("AZURE_TENANT_ID", TENANT_ID)
     monkeypatch.setenv("AZURE_CLIENT_ID", CLIENT_ID)
     monkeypatch.setenv("RAGAS_TEST_TOKEN", RAGAS_TOKEN)
+    monkeypatch.setenv("ASSEMBLYAI_API_KEY", "fake-assemblyai-key")
 
 
 @pytest.fixture()
 def client():
     with (
         patch("backend.services.knowledge_service.QdrantClient"),
+        patch("backend.services.knowledge_service.SentenceTransformer"),
+        patch("backend.services.knowledge_service.Bm25"),
+        patch("backend.services.ingest_service.QdrantClient"),
+        patch("backend.services.ingest_service.SentenceTransformer"),
+        patch("backend.services.ingest_service.Bm25"),
         patch("backend.services.chat_service.anthropic.Anthropic"),
         patch("backend.agents.rag_agent.build_rag_graph"),
     ):
@@ -136,6 +142,59 @@ def test_chat_stream_with_valid_jwt_returns_sse_200(client):
     assert response.status_code == 200
     assert "text/event-stream" in response.headers["content-type"]
     assert "30 dias" in response.text
+
+
+def test_ingest_without_token_returns_403(client):
+    """POST /ingest sem token deve retornar 403."""
+    response = client.post("/ingest", files={"file": ("aula.mp3", b"fake", "audio/mpeg")})
+    assert response.status_code == 403
+
+
+def test_ingest_unsupported_format_returns_400(client):
+    """POST /ingest com formato não suportado deve retornar 400."""
+    token = _make_valid_token()
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        response = client.post(
+            "/ingest",
+            files={"file": ("aula.pdf", b"fake-pdf", "application/pdf")},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 400
+    assert "não suportado" in response.json()["detail"]
+
+
+def test_ingest_valid_file_returns_200(client):
+    """POST /ingest com arquivo válido deve retornar 200 com n_chunks."""
+    token = _make_valid_token()
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+        patch("backend.api.routes.ingest._ingest_service") as mock_ingest,
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        mock_ingest.ingest.return_value = {
+            "filename": "aula.mp3",
+            "n_chunks": 12,
+            "duration_sec": 3600.0,
+        }
+        response = client.post(
+            "/ingest",
+            files={"file": ("aula.mp3", b"fake-audio", "audio/mpeg")},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 200
+    assert response.json()["n_chunks"] == 12
+    assert response.json()["status"] == "ok"
 
 
 def test_chat_stream_with_wrong_audience_returns_401(client):
