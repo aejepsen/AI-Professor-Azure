@@ -39,12 +39,12 @@ class KnowledgeService:
 
         vector = self._embedder.encode(query, normalize_embeddings=True).tolist()
 
-        results = self._client.search(
+        results = self._client.query_points(
             collection_name=COLLECTION_NAME,
-            query_vector=vector,
+            query=vector,
             limit=top_k,
             with_payload=True,
-        )
+        ).points
 
         return [
             {
