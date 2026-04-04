@@ -19,12 +19,22 @@ def service(mock_qdrant):
     import numpy as np
 
     with patch("backend.services.knowledge_service.settings") as s, \
-         patch("backend.services.knowledge_service.SentenceTransformer") as MockEmbed:
+         patch("backend.services.knowledge_service.SentenceTransformer") as MockDense, \
+         patch("backend.services.knowledge_service.Bm25") as MockSparse:
         s.qdrant_url = "http://fake-qdrant"
         s.qdrant_api_key = "fake-key"
-        embedder = MagicMock()
-        embedder.encode.return_value = np.zeros(768)
-        MockEmbed.return_value = embedder
+
+        dense = MagicMock()
+        dense.encode.return_value = np.zeros(1024)
+        MockDense.return_value = dense
+
+        sparse_vec = MagicMock()
+        sparse_vec.indices = np.array([0])
+        sparse_vec.values = np.array([1.0])
+        sparse = MagicMock()
+        sparse.embed.return_value = iter([sparse_vec])
+        MockSparse.return_value = sparse
+
         return KnowledgeService()
 
 
