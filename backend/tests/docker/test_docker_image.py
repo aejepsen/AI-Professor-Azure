@@ -54,16 +54,16 @@ def docker_container():
     )
     assert run.returncode == 0, f"docker run falhou:\n{run.stderr}"
 
-    # Aguarda app iniciar (máx 20s)
+    # Aguarda app iniciar (máx 3min — modelo multilingual-e5-large leva ~2min)
     base_url = f"http://localhost:{PORT}"
     started = False
-    for _ in range(20):
+    for _ in range(180):
         try:
-            r = requests.get(f"{base_url}/health", timeout=1)
+            r = requests.get(f"{base_url}/health", timeout=5)
             if r.status_code == 200:
                 started = True
                 break
-        except requests.exceptions.ConnectionError:
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             time.sleep(1)
 
     if not started:
