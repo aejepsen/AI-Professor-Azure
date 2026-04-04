@@ -55,5 +55,9 @@ async def eval_search(
     _user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Endpoint de avaliação para o pipeline RAGAS."""
-    results = _knowledge_service.search(query)
+    try:
+        results = _knowledge_service.search(query)
+    except Exception as exc:
+        logger.warning("eval_search_error", query=query, error=str(exc))
+        results = []
     return {"query": query, "results": results}

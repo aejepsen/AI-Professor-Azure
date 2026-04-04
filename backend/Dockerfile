@@ -6,8 +6,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Código da aplicação
-COPY . .
+# Código copiado como submódulo 'backend' — preserva os imports existentes
+COPY . ./backend/
 
 # Usuário não-root (segurança)
 RUN useradd -m appuser && chown -R appuser /app
