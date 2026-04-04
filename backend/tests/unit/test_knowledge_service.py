@@ -16,9 +16,15 @@ def mock_qdrant():
 
 @pytest.fixture()
 def service(mock_qdrant):
-    with patch("backend.services.knowledge_service.settings") as s:
+    import numpy as np
+
+    with patch("backend.services.knowledge_service.settings") as s, \
+         patch("backend.services.knowledge_service.SentenceTransformer") as MockEmbed:
         s.qdrant_url = "http://fake-qdrant"
         s.qdrant_api_key = "fake-key"
+        embedder = MagicMock()
+        embedder.encode.return_value = np.zeros(768)
+        MockEmbed.return_value = embedder
         return KnowledgeService()
 
 

@@ -1,9 +1,9 @@
-"""Serviço de busca híbrida no Qdrant (BM25 + dense embeddings)."""
+"""Serviço de busca semântica no Qdrant usando sentence-transformers."""
 from typing import Any
 
 import structlog
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import SearchRequest
+from sentence_transformers import SentenceTransformer
 
 from backend.core.config import settings
 
@@ -11,6 +11,7 @@ logger = structlog.get_logger()
 
 COLLECTION_NAME = "ai_professor_docs"
 DEFAULT_TOP_K = 4
+EMBED_MODEL = "paraphrase-multilingual-mpnet-base-v2"
 
 
 class KnowledgeService:
@@ -20,10 +21,11 @@ class KnowledgeService:
             api_key=settings.qdrant_api_key,
             timeout=10.0,
         )
+        self._embedder = SentenceTransformer(EMBED_MODEL)
 
     def search(self, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict[str, Any]]:
         """
-        Busca híbrida: retorna os chunks mais relevantes para a query.
+        Busca semântica: retorna os chunks mais relevantes para a query.
 
         Args:
             query: Pergunta do usuário.
@@ -35,12 +37,11 @@ class KnowledgeService:
         if not query.strip():
             return []
 
-        # Embedding inline simples — em produção usar modelo dedicado
-        # Por ora usa busca por texto via payload filter + scroll
-        # TODO: integrar modelo de embedding (ex: text-embedding-3-small)
+        vector = self._embedder.encode(query, normalize_embeddings=True).tolist()
+
         results = self._client.search(
             collection_name=COLLECTION_NAME,
-            query_vector=[0.0] * 1536,  # placeholder até integrar embedding
+            query_vector=vector,
             limit=top_k,
             with_payload=True,
         )
