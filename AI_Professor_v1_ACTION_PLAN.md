@@ -1,6 +1,6 @@
 # AI Professor v1 — Action Plan
 
-> Versão: 1.0 | Data: 2026-03-30
+> Versão: 1.1 | Data: 2026-04-05 (atualizado após implementação)
 > Objetivo: eliminar todos os bloqueios técnicos e entregar um sistema RAG corporativo production-ready.
 
 ---
@@ -21,36 +21,43 @@
 ## 2. ARQUITETURA TARGET
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        AZURE (eastus)                           │
-│                                                                 │
-│  ┌──────────────────┐        ┌─────────────────────────────┐   │
-│  │  Static Web App  │        │      Container Apps Env      │   │
-│  │  Angular 17      │◄──────►│                             │   │
-│  │  (MSAL + NgRx)   │  HTTPS │  ┌─────────────────────┐   │   │
-│  └──────────────────┘  + JWT │  │   FastAPI Backend    │   │   │
-│                              │  │   (uvicorn/gunicorn) │   │   │
-│  ┌──────────────────┐        │  └──────────┬──────────┘   │   │
-│  │  Azure Entra ID  │        │             │               │   │
-│  │  ┌────────────┐  │        │  ┌──────────▼──────────┐   │   │
-│  │  │ App Reg FE │  │        │  │   LangGraph Agent    │   │   │
-│  │  └────────────┘  │        │  │   (StateGraph)       │   │   │
-│  │  ┌────────────┐  │        │  └──────────┬──────────┘   │   │
-│  │  │ App Reg API│  │        │             │               │   │
-│  │  └────────────┘  │        │  ┌──────────▼──────────┐   │   │
-│  └──────────────────┘        │  │  KnowledgeService    │   │   │
-│                              │  │  (Qdrant hybrid)     │   │   │
-│  ┌──────────────────┐        │  └─────────────────────┘   │   │
-│  │  ACR             │        └─────────────────────────────┘   │
-│  │  Docker Images   │                                           │
-│  └──────────────────┘                                           │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           AZURE (eastus)                                 │
+│                                                                          │
+│  ┌──────────────────┐   HTTPS+JWT  ┌──────────────────────────────────┐ │
+│  │  Static Web App  │◄────────────►│      Container Apps Env          │ │
+│  │  Angular 17      │              │  ┌──────────────────────────┐    │ │
+│  │  (MSAL standalone│              │  │     FastAPI Backend       │    │ │
+│  │   + XHR upload)  │              │  │     (uvicorn)            │    │ │
+│  └────────┬─────────┘              │  └──────────┬───────────────┘    │ │
+│           │ PUT (XHR, SAS token)   │             │                     │ │
+│           │                        │  ┌──────────▼───────────────┐    │ │
+│  ┌────────▼─────────┐              │  │   LangGraph Agent         │    │ │
+│  │  Azure Blob      │              │  │   (StateGraph)            │    │ │
+│  │  Storage         │              │  └──────────┬───────────────┘    │ │
+│  │  (uploads cont.) │◄─────────────┤             │                     │ │
+│  └──────────────────┘  SAS read   │  ┌──────────▼───────────────┐    │ │
+│                         (backend)  │  │  KnowledgeService         │    │ │
+│  ┌──────────────────┐              │  │  (Qdrant hybrid search)  │    │ │
+│  │  Azure Entra ID  │              │  └──────────────────────────┘    │ │
+│  │  ┌────────────┐  │◄────────────►│                                  │ │
+│  │  │ App Reg FE │  │  JWKS        └──────────────────────────────────┘ │
+│  │  └────────────┘  │                                                    │
+│  │  ┌────────────┐  │                                                    │
+│  │  │ App Reg API│  │                                                    │
+│  │  └────────────┘  │                                                    │
+│  └──────────────────┘                                                    │
+│                                                                          │
+│  ┌──────────────────┐                                                    │
+│  │  GitHub Container│                                                    │
+│  │  Registry (GHCR) │  ← imagens Docker (não ACR)                       │
+│  └──────────────────┘                                                    │
+└──────────────────────────────────────────────────────────────────────────┘
                                     │
-                    ┌───────────────▼──────────────┐
-                    │        EXTERNOS              │
-                    │  Qdrant Cloud (us-east-1)    │
-                    │  Anthropic API               │
-                    └──────────────────────────────┘
+               ┌────────────────────┼─────────────────────┐
+               ▼                    ▼                      ▼
+   Qdrant Cloud (us-east-1)  Anthropic API          AssemblyAI API
+   (busca híbrida RAG)       (Claude Sonnet 4.6)    (transcrição vídeo)
 ```
 
 ---
@@ -62,7 +69,7 @@
 ```
 Usuário
   │
-  ▼ (1) Login Microsoft
+  ▼ (1) Login Microsoft (redirect flow)
 Azure Entra ID ──► Token MSAL (escopo: api://{API_CLIENT_ID}/access_as_user)
   │
   ▼ (2) Bearer Token no header Authorization
@@ -71,19 +78,21 @@ Frontend Angular
   ▼ (3) POST /chat/stream  Authorization: Bearer <jwt>
 FastAPI Backend
   │
-  ▼ (4) Valida JWT
-  │   audience  = api://{API_CLIENT_ID}/access_as_user  ✓
-  │   issuer    = https://sts.windows.net/{TENANT_ID}/  ✓
-  │   signature = chaves públicas JWKS da Microsoft      ✓
+  ▼ (4) Valida JWT via python-jose + JWKS público Microsoft
+  │   audience  = {API_CLIENT_ID}  (GUID bare — NÃO "api://...")  ✓
+  │   issuer    = https://login.microsoftonline.com/{TENANT_ID}/v2.0  ✓
+  │   signature = chaves públicas JWKS da Microsoft                    ✓
   │
   ▼ (5) Autorizado → executa LangGraph
   │
   ▼ (6) API Key no header
-Anthropic API (Claude Sonnet)
+Anthropic API (Claude Sonnet 4.6)
   │
   ▼ (7) API Key no header
 Qdrant Cloud
 ```
+
+> **Nota crítica (descoberta em produção)**: O `accessTokenAcceptedVersion = 2` no App Reg API faz o Azure emitir tokens v2 onde `aud` é o GUID bare do App Reg (ex: `087f139e-7252-49cf-ab70-abb64eac8667`), **não** `api://...`. O issuer é `https://login.microsoftonline.com/{tenant}/v2.0` (não `sts.windows.net`). O MSAL do frontend solicita o escopo `api://{client_id}/access_as_user`, mas o campo `aud` no JWT resultante é o GUID puro.
 
 ### 3.2 App Registrations obrigatórios
 
@@ -96,11 +105,15 @@ Qdrant Cloud
 
 ```
 Token gerado pelo frontend → escopo api://{API_CLIENT_ID}/access_as_user
-Backend valida:
-  - aud = api://{API_CLIENT_ID}/access_as_user   (NÃO "00000003-..." do Graph)
-  - iss = https://sts.windows.net/{TENANT_ID}/
+
+Backend valida (tokens v2 com accessTokenAcceptedVersion=2):
+  - aud = {API_CLIENT_ID}   (GUID bare, ex: 087f139e-7252-49cf-ab70-abb64eac8667)
+              NÃO "api://..." e NÃO "00000003-..." do Graph
+  - iss = https://login.microsoftonline.com/{TENANT_ID}/v2.0
+              NÃO "https://sts.windows.net/..."
   - exp > now()
   - assinatura via JWKS endpoint da Microsoft
+    https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys
 ```
 
 ---
@@ -117,6 +130,10 @@ Backend valida:
 | `AZURE_TENANT_ID` | `azure-tenant-id` | Auth middleware |
 | `AZURE_CLIENT_ID` | `azure-client-id` | Auth middleware (= API App Registration client ID) |
 | `RAGAS_TEST_TOKEN` | `ragas-test-token` | /eval endpoints |
+| `AZURE_STORAGE_ACCOUNT_NAME` | `storage-account-name` | BlobService (SAS token generation) |
+| `AZURE_STORAGE_ACCOUNT_KEY` | `storage-account-key` | BlobService (SAS token generation) |
+| `AZURE_STORAGE_CONTAINER` | `storage-container` | BlobService (default: `uploads`) |
+| `ASSEMBLYAI_API_KEY` | `assemblyai-key` | IngestService (transcrição via URL) |
 
 ### 4.2 Static Web App (frontend) — build-time apenas
 
@@ -131,14 +148,24 @@ Backend valida:
 
 | Secret | Uso |
 |---|---|
-| `AZURE_CREDENTIALS` | Service Principal para deploy (escopo mínimo) |
-| `ACR_LOGIN_SERVER` | Azure Container Registry URL |
+| `AZURE_CREDENTIALS` | Service Principal JSON para deploy (az login) |
 | `CONTAINER_APP_NAME` | Nome do Container App |
-| `RESOURCE_GROUP` | `ai-professor-prod-rg` |
-| `ANTHROPIC_API_KEY` | RAGAS Quality Gate no CI |
-| `QDRANT_URL` | RAGAS Quality Gate no CI |
-| `QDRANT_API_KEY` | RAGAS Quality Gate no CI |
+| `RESOURCE_GROUP` | Resource group Azure |
+| `ANTHROPIC_API_KEY` | ChatService + RAGAS Quality Gate |
+| `QDRANT_URL` | KnowledgeService + RAGAS |
+| `QDRANT_API_KEY` | KnowledgeService + RAGAS |
 | `RAGAS_TEST_TOKEN` | RAGAS Quality Gate no CI |
+| `GHCR_USERNAME` | GitHub Container Registry (push imagem) |
+| `GHCR_TOKEN` | GitHub Container Registry (push imagem) |
+| `AZURE_STATIC_WEB_APPS_API_TOKEN` | Deploy do frontend no Static Web App |
+| `AZURE_TENANT_ID` | Auth JWT + deploy |
+| `AZURE_CLIENT_ID` | Auth JWT backend |
+| `AZURE_STORAGE_ACCOUNT_NAME` | BlobService no backend |
+| `AZURE_STORAGE_ACCOUNT_KEY` | BlobService no backend |
+| `AZURE_STORAGE_CONTAINER` | BlobService no backend (default: `uploads`) |
+| `ASSEMBLYAI_API_KEY` | IngestService no backend |
+
+> **Nota**: Não usamos ACR (Azure Container Registry). As imagens são publicadas no **GitHub Container Registry (ghcr.io)** e referenciadas no Container App update.
 
 ---
 
@@ -252,7 +279,9 @@ text = text.lower()
 | Qdrant | `prefer_grpc=True`, connection pool, batch upsert |
 | Claude API | Streaming SSE direto ao cliente, sem buffer intermediário |
 | FastAPI | Workers assíncronos (`asyncio`), evitar bloqueio de event loop |
-| Container App | Min replicas = 1, Max = 3, CPU 0.5 / Mem 1Gi |
+| Container App | **2 CPU / 4Gi** (necessário para multilingual-e5-large), `min_replicas=0` (scale-to-zero) |
+| Ingest assíncrono | `BackgroundTasks` do FastAPI — retorna `job_id` imediatamente, frontend faz polling |
+| Upload direto | Frontend faz PUT direto ao Azure Blob via XHR com SAS token — backend nunca recebe o arquivo |
 
 ### 8.2 Frontend
 
@@ -429,12 +458,80 @@ Para cada decisão não óbvia, criar um arquivo `docs/adr/NNN-titulo.md` com:
 | De | Para | Protocolo | Auth | Falha crítica? |
 |---|---|---|---|---|
 | Angular | FastAPI | HTTPS + SSE | Bearer JWT (Entra ID) | Sim |
-| FastAPI | Qdrant Cloud | HTTPS/gRPC | API Key (header) | Sim |
+| Angular | Azure Blob Storage | HTTPS PUT (XHR) | SAS token (write, 2h) | Sim (ingest) |
+| FastAPI | Azure Blob Storage | HTTPS | Account Key (gerar SAS) | Sim (ingest) |
+| FastAPI | AssemblyAI API | HTTPS | API Key (header) | Sim (ingest) |
+| FastAPI | Qdrant Cloud | HTTPS | API Key (header) | Sim |
 | FastAPI | Anthropic API | HTTPS | API Key (header) | Sim |
 | FastAPI | Azure Entra JWKS | HTTPS | Público (sem auth) | Sim |
-| GitHub Actions | ACR | HTTPS | Service Principal | Deploy |
+| GitHub Actions | GHCR (ghcr.io) | HTTPS | `GHCR_TOKEN` | Deploy |
 | GitHub Actions | Container Apps | HTTPS | Service Principal | Deploy |
-| GitHub Actions | Static Web App | HTTPS | Service Principal | Deploy |
+| GitHub Actions | Static Web App | HTTPS | `AZURE_STATIC_WEB_APPS_API_TOKEN` | Deploy |
 | RAGAS (CI) | FastAPI | HTTPS | Token fixo (`RAGAS_TEST_TOKEN`) | Qualidade |
+
+---
+
+## 13. PIPELINE DE INGEST — ARQUITETURA
+
+### 13.1 Fluxo de upload de vídeo
+
+```
+Frontend                    Azure Blob           FastAPI              AssemblyAI     Qdrant
+   │                        Storage              Backend                  │              │
+   │ GET /ingest/sas-token    │                     │                     │              │
+   │─────────────────────────────────────────────►  │                     │              │
+   │◄───────────────────────── upload_url + blob_name                     │              │
+   │                                                 │                     │              │
+   │ PUT {upload_url} (XHR + x-ms-blob-type: BlockBlob)                   │              │
+   │────────────────────────►│                       │                     │              │
+   │  onprogress (0→100%)    │                       │                     │              │
+   │◄────────────────────────│                       │                     │              │
+   │                         │                       │                     │              │
+   │ POST /ingest/process {blob_name, filename}       │                     │              │
+   │─────────────────────────────────────────────►   │                     │              │
+   │◄──────────────────── {job_id}  (imediato)        │                     │              │
+   │                         │                       │                     │              │
+   │ GET /ingest/status/{job_id}  (polling 5s)        │ GET SAS read URL    │              │
+   │────────────────────────────────────────────►     │────────────────────►│              │
+   │◄──────────────── {status: "processing"}          │  transcript text    │              │
+   │                         │                       │◄────────────────────│              │
+   │ GET /ingest/status/{job_id}                      │ chunks → upsert     │              │
+   │────────────────────────────────────────────►     │──────────────────────────────────► │
+   │◄──────────── {status: "done", chunks_indexed: N} │  delete blob        │              │
+   │                         │◄──────────────────────│                     │              │
+```
+
+### 13.2 Configuração AssemblyAI
+
+```python
+# SDK 0.59.0 — transcrição via URL (não upload de arquivo)
+config = aai.TranscriptionConfig(
+    speech_models=["universal-2"],  # plural, lista — SDK >= 0.59.0
+    language_code="pt",
+)
+transcriber = aai.Transcriber(config=config)
+transcript = transcriber.transcribe(sas_read_url)
+```
+
+> **Nota**: `speech_model` (singular) foi depreciado no SDK 0.59.0. Usar `speech_models` (plural, lista). Transcrição via URL requer argumento explícito — sem ele, erro "speech_models must be a non-empty list".
+
+### 13.3 CORS no Azure Blob Storage
+
+```bash
+# Limpar regras existentes antes de adicionar (evitar duplicatas)
+az storage cors clear --services b --account-name aiprofessorstorage
+az storage cors add \
+  --services b \
+  --methods GET PUT DELETE OPTIONS \
+  --origins "https://jolly-cliff-0e7c4130f.1.azurestaticapps.net" "http://localhost:4200" \
+  --allowed-headers "*" \
+  --exposed-headers "*" \
+  --max-age 3600 \
+  --account-name aiprofessorstorage
+```
+
+### 13.4 Fontes dinâmicas no system prompt
+
+`KnowledgeService.list_sources()` consulta o Qdrant em tempo real (scroll na collection) e retorna a lista de fontes únicas indexadas. O `retrieve` node do LangGraph adiciona essa lista ao estado, e o `ChatService` a injeta no system prompt a cada requisição. Claude pode então listar os assuntos disponíveis dinamicamente, sem hardcode.
 
 ---

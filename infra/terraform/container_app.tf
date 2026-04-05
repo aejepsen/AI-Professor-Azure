@@ -79,6 +79,18 @@ resource "azurerm_container_app" "backend" {
     name  = "assemblyai-key"
     value = var.assemblyai_api_key
   }
+  secret {
+    name  = "storage-account-name"
+    value = azurerm_storage_account.uploads.name
+  }
+  secret {
+    name  = "storage-account-key"
+    value = azurerm_storage_account.uploads.primary_access_key
+  }
+  secret {
+    name  = "storage-container"
+    value = azurerm_storage_container.uploads.name
+  }
 
   template {
     min_replicas = 0 # scale-to-zero → custo zero quando inativo
@@ -118,6 +130,18 @@ resource "azurerm_container_app" "backend" {
       env {
         name        = "ASSEMBLYAI_API_KEY"
         secret_name = "assemblyai-key"
+      }
+      env {
+        name        = "AZURE_STORAGE_ACCOUNT_NAME"
+        secret_name = "storage-account-name"
+      }
+      env {
+        name        = "AZURE_STORAGE_ACCOUNT_KEY"
+        secret_name = "storage-account-key"
+      }
+      env {
+        name        = "AZURE_STORAGE_CONTAINER"
+        secret_name = "storage-container"
       }
 
       liveness_probe {

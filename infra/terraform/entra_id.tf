@@ -6,12 +6,12 @@
 # -----------------------------------------------------------------------------
 # App Registration — API (backend)
 # Expõe o escopo access_as_user que o frontend solicita
-# accessTokenAcceptedVersion = 2 → tokens v2 com audience api://CLIENT_ID
+# accessTokenAcceptedVersion = 2 → tokens v2 com audience = GUID bare (não api://...)
+# identifier_uri adicionado via recurso separado para evitar self-reference no plan
 # -----------------------------------------------------------------------------
 resource "azuread_application" "api" {
   display_name     = "ai-professor-api"
   sign_in_audience = "AzureADMyOrg"
-  identifier_uris  = ["api://${azuread_application.api.client_id}"]
 
   api {
     requested_access_token_version = 2
@@ -27,6 +27,12 @@ resource "azuread_application" "api" {
       value                      = "access_as_user"
     }
   }
+}
+
+# Adiciona identifier_uri após criação para evitar self-reference (client_id known-after-apply)
+resource "azuread_application_identifier_uri" "api" {
+  application_id = azuread_application.api.id
+  identifier_uri = "api://${azuread_application.api.client_id}"
 }
 
 resource "azuread_service_principal" "api" {
@@ -45,6 +51,7 @@ resource "azuread_application" "frontend" {
   single_page_application {
     redirect_uris = [
       "https://${azurerm_static_web_app.frontend.default_host_name}/",
+      "http://localhost:4200/",
     ]
   }
 

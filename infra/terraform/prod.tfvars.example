@@ -14,10 +14,14 @@ anthropic_api_key   = "sk-ant-..."
 qdrant_url          = "https://xxxx.us-east-1-1.aws.cloud.qdrant.io"
 qdrant_api_key      = "eyJ..."
 ragas_test_token    = "token-fixo-para-ci"
+assemblyai_api_key  = "..."  # AssemblyAI API Key para transcrição de vídeo
 
 # ghcr.io
 ghcr_username       = "seu-usuario-github"
-ghcr_token          = "ghp_..."  # PAT com read:packages
+ghcr_token          = "ghp_..."  # PAT com permissões: read:packages, write:packages
 
 # Container image
 container_image     = "ghcr.io/seu-usuario/ai-professor-backend:latest"
+
+# Nota: Azure Storage Account é criado pelo Terraform — não precisa de variável aqui.
+# A chave de acesso é referenciada diretamente via azurerm_storage_account.uploads.primary_access_key

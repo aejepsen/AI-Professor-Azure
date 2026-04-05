@@ -37,3 +37,13 @@ output "container_app_name" {
   description = "Nome do Container App (para az containerapp update no CI/CD)"
   value       = azurerm_container_app.backend.name
 }
+
+output "storage_account_name" {
+  description = "Nome da Storage Account para upload de vídeos"
+  value       = azurerm_storage_account.uploads.name
+}
+
+output "api_identifier_uri" {
+  description = "URI do escopo da API (para MSAL no frontend)"
+  value       = "api://${azuread_application.api.client_id}/access_as_user"
+}
