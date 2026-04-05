@@ -85,6 +85,42 @@ def test_search_limits_results(service, mock_qdrant):
     assert len(results) <= 3
 
 
+def test_list_sources_retorna_lista_vazia_e_loga_em_caso_de_erro(service, mock_qdrant):
+    """Erro no scroll deve ser capturado, logado e retornar lista vazia."""
+    mock_qdrant.scroll.side_effect = Exception("Qdrant indisponível")
+    result = service.list_sources()
+    assert result == []
+
+
+def test_search_with_coverage_adds_missing_source(service, mock_qdrant):
+    """search_with_coverage deve incluir chunk de fonte não coberta pela busca semântica."""
+    # Busca semântica (query_points) retorna só fonte_a
+    hit_a = _make_hit("conteúdo A", "fonte_a.pdf", score=0.9)
+    mock_qdrant.query_points.return_value = _query_points_result([hit_a])
+
+    # list_sources: fonte_a e fonte_b existem no Qdrant
+    source_point_a = MagicMock()
+    source_point_a.payload = {"source": "fonte_a.pdf"}
+    source_point_b = MagicMock()
+    source_point_b.payload = {"source": "fonte_b.pdf"}
+
+    # chunk representativo da fonte_b (scroll com filtro)
+    chunk_b = MagicMock()
+    chunk_b.payload = {"text": "conteúdo B", "source": "fonte_b.pdf"}
+
+    # Primeira chamada scroll → list_sources; segunda → chunk de fonte_b
+    mock_qdrant.scroll.side_effect = [
+        ([source_point_a, source_point_b], None),
+        ([chunk_b], None),
+    ]
+
+    results = service.search_with_coverage("alguma query")
+
+    sources_in_results = {r["source"] for r in results}
+    assert "fonte_a.pdf" in sources_in_results
+    assert "fonte_b.pdf" in sources_in_results
+
+
 def test_search_rrf_merges_dense_and_sparse(service, mock_qdrant):
     """Hit que aparece em dense e sparse deve ter score RRF maior que hit exclusivo."""
     shared_hit = _make_hit("texto compartilhado", "fonte.pdf")

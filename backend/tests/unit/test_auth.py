@@ -185,7 +185,7 @@ async def test_get_jwks_faz_requisicao_http_quando_cache_vazio(mock_settings):
 
     assert result == fake_jwks
     expected_url = f"https://login.microsoftonline.com/{TENANT_ID}/discovery/v2.0/keys"
-    mock_http_client.get.assert_called_once_with(expected_url, timeout=10.0)
+    mock_http_client.get.assert_called_once_with(expected_url, timeout=30.0)
 
 
 @pytest.mark.asyncio

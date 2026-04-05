@@ -93,6 +93,21 @@ def test_format_context_multiplos_chunks_numerados():
     assert "[3] doc_c.pdf:" in result
 
 
+def test_stream_com_sources_inclui_lista_no_system_prompt(service):
+    """Quando sources é fornecido, o system prompt deve incluir os nomes dos documentos."""
+    mock_stream = MagicMock()
+    mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+    mock_stream.__exit__ = MagicMock(return_value=False)
+    mock_stream.__iter__ = MagicMock(return_value=iter([]))
+    service._client.messages.stream = MagicMock(return_value=mock_stream)
+
+    list(service.generate_stream("teste", context=[], sources=["aula.mp4", "doc.pdf"]))
+
+    call_kwargs = service._client.messages.stream.call_args[1]
+    assert "aula.mp4" in call_kwargs["system"]
+    assert "doc.pdf" in call_kwargs["system"]
+
+
 def test_format_context_chunk_sem_source_usa_fallback():
     """Chunk sem chave 'source' deve usar 'Documento' como fallback."""
     chunks = [{"text": "Conteúdo sem fonte"}]

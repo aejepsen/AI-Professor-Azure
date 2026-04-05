@@ -173,7 +173,7 @@ Backend valida (tokens v2 com accessTokenAcceptedVersion=2):
 
 ### 5.1 Princípio do menor privilégio
 
-- Service Principal do CI/CD: apenas `AcrPush` no ACR + `Contributor` no Resource Group
+- Service Principal do CI/CD: apenas `Contributor` no Resource Group (sem ACR — imagens no GHCR)
 - Container App Managed Identity: sem permissões desnecessárias no Azure AD
 - Qdrant: API Key com permissão apenas na collection `ai_professor_docs`
 
@@ -517,17 +517,21 @@ transcript = transcriber.transcribe(sas_read_url)
 
 ### 13.3 CORS no Azure Blob Storage
 
-```bash
-# Limpar regras existentes antes de adicionar (evitar duplicatas)
-az storage cors clear --services b --account-name aiprofessorstorage
-az storage cors add \
-  --services b \
-  --methods GET PUT DELETE OPTIONS \
-  --origins "https://jolly-cliff-0e7c4130f.1.azurestaticapps.net" "http://localhost:4200" \
-  --allowed-headers "*" \
-  --exposed-headers "*" \
-  --max-age 3600 \
-  --account-name aiprofessorstorage
+Configurado via Terraform em `infra/terraform/blob_storage.tf`:
+
+```hcl
+blob_properties {
+  cors_rule {
+    allowed_headers    = ["*"]
+    allowed_methods    = ["GET", "PUT", "DELETE", "OPTIONS"]
+    allowed_origins    = [
+      "https://${azurerm_static_web_app.frontend.default_host_name}",
+      "http://localhost:4200/",
+    ]
+    exposed_headers    = ["*"]
+    max_age_in_seconds = 3600
+  }
+}
 ```
 
 ### 13.4 Fontes dinâmicas no system prompt

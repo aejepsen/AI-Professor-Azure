@@ -43,82 +43,67 @@ npm install @azure/msal-browser marked
 - [x] `python -c "import fastapi, langgraph, anthropic, qdrant_client"` sem erros
 - [x] `ng version` retorna Angular 17
 - [x] `git status` limpo, `.env` não rastreado
-- [ ] `terraform version` retorna >= 1.5.0
+- [x] `terraform version` retorna >= 1.5.0 (instalado: v1.14.8)
 
 ---
 
-## FASE 1 — INFRAESTRUTURA AZURE ⚠️ PARCIALMENTE CONCLUÍDA
-**Objetivo**: toda a infraestrutura provisionada como código, reproduzível.
+## FASE 1 — INFRAESTRUTURA AZURE ✅ CONCLUÍDA
+**Objetivo**: toda a infraestrutura provisionada como código via Terraform, reproduzível.
 
-> **Status**: recursos criados via `az cli` (workaround para agilizar o desenvolvimento). Migração para Terraform é um requisito pendente — nenhum recurso deve permanecer fora do IaC em produção final.
+### 1.1 App Registrations via Terraform (`infra/terraform/entra_id.tf`)
 
-### 1.1 App Registrations (PRIORITÁRIO — sem isso nada funciona)
-
-```bash
-# Via az cli (Terraform azuread provider também funciona)
-# App Reg FRONTEND (SPA)
-az ad app create \
-  --display-name "ai-professor-frontend" \
-  --sign-in-audience "AzureADMyOrg" \
-  --spa-redirect-uris "https://{STATIC_WEB_APP_URL}"
-
-# App Reg API BACKEND
-az ad app create \
-  --display-name "ai-professor-api" \
-  --sign-in-audience "AzureADMyOrg"
-
-# Expor escopo no App Reg API
-az ad app update --id {API_APP_ID} \
-  --set api.oauth2PermissionScopes='[{
-    "id": "{UUID-NOVO}",
-    "adminConsentDescription": "Permite acesso à API",
-    "adminConsentDisplayName": "access_as_user",
-    "isEnabled": true,
-    "type": "User",
-    "userConsentDescription": "Permite acesso à API",
-    "userConsentDisplayName": "access_as_user",
-    "value": "access_as_user"
-  }]'
-
-# Configurar accessTokenAcceptedVersion = 2
-az ad app update --id {API_APP_ID} \
-  --set api.requestedAccessTokenVersion=2
-```
-
-### 1.2 Terraform — módulos a criar
-
-**`infra/terraform/main.tf`** — recursos principais:
 ```hcl
-terraform {
-  required_version = ">= 1.5.0"
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.0"
+# App Reg API — expõe escopo access_as_user, tokens v2 (aud = GUID bare)
+resource "azuread_application" "api" {
+  display_name     = "ai-professor-api"
+  sign_in_audience = "AzureADMyOrg"
+  api {
+    requested_access_token_version = 2
+    oauth2_permission_scope {
+      value   = "access_as_user"
+      enabled = true
+      ...
     }
   }
-  # Backend remoto obrigatório (Storage Account Azure ou Terraform Cloud)
-  backend "azurerm" {
-    resource_group_name  = "tf-state-rg"
-    storage_account_name = "aiprofessortfstate"
-    container_name       = "tfstate"
-    key                  = "ai-professor-prod.tfstate"
-  }
+}
+resource "azuread_application_identifier_uri" "api" {
+  application_id = azuread_application.api.id
+  identifier_uri = "api://${azuread_application.api.client_id}"
 }
 
-module "container_app_env" { ... }
-module "container_app_backend" { ... }
-module "static_web_app" { ... }
-module "acr" { ... }
+# App Reg Frontend — SPA, redirect para Static Web App + localhost
+resource "azuread_application" "frontend" {
+  display_name = "ai-professor-frontend"
+  single_page_application {
+    redirect_uris = [
+      "https://${azurerm_static_web_app.frontend.default_host_name}/",
+      "http://localhost:4200/",
+    ]
+  }
+}
 ```
 
-**Recursos obrigatórios**:
+### 1.2 Terraform — estrutura de arquivos
+
+```
+infra/terraform/
+├── main.tf          # providers + backend remoto (aiprofessortfstate)
+├── variables.tf     # todas as variáveis (secrets via prod.tfvars)
+├── outputs.tf       # URLs, client IDs, api_key do Static Web App
+├── container_app.tf # Log Analytics + Container Apps Env + Container App
+├── static_web_app.tf# Static Web App (Free tier, eastus2)
+├── blob_storage.tf  # Storage Account + Container + CORS
+├── entra_id.tf      # App Registrations + Service Principals
+└── prod.tfvars      # valores reais (não commitado — no .gitignore)
+```
+
+**Recursos gerenciados**:
 - Resource Group: `ai-professor-prod-rg`
-- Azure Container Registry (ACR): para imagens Docker
-- Container Apps Environment: networking compartilhado
-- Container App (backend): com secrets configurados via Terraform
-- Static Web App: para frontend Angular
-- Storage Account: estado do Terraform
+- Container Apps Environment + Log Analytics
+- Container App (backend): 2 CPU / 4Gi, min_replicas=0, todos os secrets via Terraform
+- Static Web App: frontend Angular (Free tier)
+- Storage Account: uploads de vídeo com CORS configurado
+- App Registrations: frontend SPA + API backend
 
 ### 1.3 Secrets no Container App via Terraform
 
@@ -158,9 +143,9 @@ terraform apply tfplan
 ```
 
 ### Critérios de aceite — Fase 1
-- [ ] `terraform apply` sem erros (migração dos recursos para IaC — **pendente**)
-- [ ] Todos os recursos declarados no Terraform (Container App, Static Web App, Blob Storage, App Registrations)
-- [ ] Terraform state remoto configurado (Storage Account Azure)
+- [x] `terraform apply` sem erros
+- [x] Todos os recursos declarados no Terraform (Container App, Static Web App, Blob Storage, App Registrations)
+- [x] Terraform state remoto configurado (`aiprofessortfstate` em `ai-professor-tfstate-rg`)
 - [x] Container App provisionado e Running (`ai-professor-backend`, 2 CPU / 4Gi, min_replicas=0)
 - [x] Container App tem todas as env vars configuradas via secrets
 - [x] Static Web App provisionado: `https://jolly-cliff-0e7c4130f.1.azurestaticapps.net`
@@ -672,7 +657,7 @@ curl {API_URL}/metrics
 |---|---|---|
 | JWT audience errado (mesmo erro da v1) | Alta | Testar unitariamente 5 cenários de JWT antes de qualquer deploy |
 | CSP bloqueando MSAL | Alta | Configurar CSP no dia 1, testar login antes de implementar chat |
-| Secrets perdidos entre deploys | Alta | 100% Terraform com secrets declarados — nunca az cli manual |
+| Secrets perdidos entre deploys | Alta | 100% Terraform com secrets declarados em `prod.tfvars` (não commitado) |
 | RAGAS score abaixo do threshold | Média | Rodar RAGAS localmente antes de fazer PR para main |
 | Container App sem memória suficiente | Baixa | Definir CPU/Mem no Terraform, monitorar métricas após deploy |
 | Qdrant Cloud fora do ar | Baixa | Health check expõe status, retry policy no KnowledgeService |
@@ -686,7 +671,7 @@ curl {API_URL}/metrics
 - [x] Container App com scale-to-zero (min_replicas=0)
 - [x] CI/CD com path-filter para não reiniciar backend em changes de frontend
 - [x] Blob deletado após processamento (sem dados desnecessários)
-- [ ] **Terraform**: toda a infraestrutura migrada para IaC (requisito pendente)
+- [x] **Terraform**: toda a infraestrutura gerenciada via IaC (`terraform apply` executado)
 - [ ] RAGAS score produção ≥ 0.70 (avaliação formal pendente)
 - [ ] Backup da Qdrant collection documentado
 - [ ] Runbook de incidents criado
@@ -704,4 +689,4 @@ curl {API_URL}/metrics
 | Progress bar não aparecia | Callbacks fora da Angular zone | `ChangeDetectorRef.detectChanges()` |
 | AssemblyAI "speech_models error" | SDK 0.30.0 não suporta `speech_models` plural | Upgrade para assemblyai==0.59.0 |
 | PCD_AULA_8 sumia da listagem | Busca semântica não recuperava chunks para meta-perguntas | `list_sources()` injetado no system prompt |
-| CORS duplicado no Blob Storage | `az storage cors add` executado duas vezes | `cors clear` antes de `cors add` |
+| CORS duplicado no Blob Storage | Regras adicionadas manualmente antes do Terraform | CORS agora declarado em `blob_storage.tf` — único source of truth |

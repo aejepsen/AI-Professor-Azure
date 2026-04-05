@@ -22,8 +22,8 @@ app.add_middleware(
         "https://jolly-cliff-0e7c4130f.1.azurestaticapps.net",
         "http://localhost:4200",
     ],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 app.include_router(health_router)

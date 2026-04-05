@@ -31,6 +31,7 @@ class ChatService:
         Args:
             query: Pergunta do usuário.
             context: Lista de chunks recuperados do Qdrant.
+            sources: Lista de nomes de documentos indexados (para o system prompt).
 
         Yields:
             Fragmentos de texto conforme são gerados.
@@ -40,8 +41,8 @@ class ChatService:
 
         system = SYSTEM_PROMPT
         if sources:
-            sources_text = "\n".join(f"- {s}" for s in sources)
-            system += f"\n\nDocumentos indexados disponíveis:\n{sources_text}"
+            docs_list = "\n".join(f"- {s}" for s in sources)
+            system = f"{SYSTEM_PROMPT}\n\nDocumentos disponíveis na base de conhecimento:\n{docs_list}"
 
         logger.info("chat_stream_start", query_len=len(query), context_chunks=len(context))
 

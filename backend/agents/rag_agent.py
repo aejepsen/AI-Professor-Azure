@@ -26,7 +26,7 @@ def build_rag_graph(
 
     def retrieve(state: AgentState) -> AgentState:
         logger.info("rag_retrieve", query=state["query"][:50])
-        context = knowledge_service.search(state["query"])
+        context = knowledge_service.search_with_coverage(state["query"])
         sources = knowledge_service.list_sources()
         return {**state, "context": context, "sources": sources}
 

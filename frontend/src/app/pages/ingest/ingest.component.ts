@@ -44,6 +44,7 @@ export class IngestComponent {
 
     this.estimatedMinutes = await this._estimateProcessingMinutes(file);
     this.loading = true;
+    this.phase = 'upload';
     try {
       const token = await this.auth.getToken();
       const result = await this.api.ingestViaBlob(

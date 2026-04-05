@@ -1,4 +1,5 @@
 """Serviço de ingestão: vídeo/áudio → transcrição → chunks → Qdrant."""
+import os
 import tempfile
 import uuid
 from collections.abc import Generator
@@ -74,13 +75,17 @@ class IngestService:
 
     def _transcribe(self, file_bytes: bytes, filename: str) -> tuple[str, float]:
         """Envia arquivo para AssemblyAI e retorna transcrição + duração."""
-        with tempfile.NamedTemporaryFile(suffix=f"_{filename}", delete=False) as tmp:
+        safe_suffix = "_" + os.path.basename(filename)
+        with tempfile.NamedTemporaryFile(suffix=safe_suffix, delete=False) as tmp:
             tmp.write(file_bytes)
             tmp_path = tmp.name
 
-        config = aai.TranscriptionConfig(language_code="pt")
-        transcriber = aai.Transcriber(config=config)
-        transcript = transcriber.transcribe(tmp_path)
+        try:
+            config = aai.TranscriptionConfig(language_code="pt")
+            transcriber = aai.Transcriber(config=config)
+            transcript = transcriber.transcribe(tmp_path)
+        finally:
+            os.unlink(tmp_path)
 
         if transcript.status == aai.TranscriptStatus.error:
             raise RuntimeError(f"AssemblyAI error: {transcript.error}")
@@ -92,7 +97,7 @@ class IngestService:
     def _transcribe_url(self, url: str, filename: str) -> tuple[str, float]:
         """AssemblyAI busca o áudio diretamente da URL SAS e retorna transcrição + duração."""
         config = aai.TranscriptionConfig(
-            speech_models=["universal-2"],
+            speech_model=aai.SpeechModel.best,
             language_code="pt",
         )
         transcriber = aai.Transcriber(config=config)

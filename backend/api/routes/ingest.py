@@ -1,10 +1,11 @@
 """Endpoints de ingestão de vídeo/áudio."""
+import threading
 import uuid
 from typing import Any
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.api.auth import get_current_user
 from backend.services.blob_service import BlobService
@@ -21,6 +22,7 @@ MAX_FILE_SIZE_MB = 1024
 
 # Armazena status dos jobs em memória (suficiente para instância única)
 _jobs: dict[str, dict[str, Any]] = {}
+_jobs_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -56,8 +58,8 @@ async def ingest_video(
     try:
         result = _ingest_service.ingest(file_bytes, file.filename or "upload")
     except Exception as exc:
-        logger.error("ingest_error", error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Erro na ingestão: {exc}") from exc
+        logger.error("ingest_error", error=str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro ao processar arquivo.") from exc
 
     return {
         "status": "ok",
@@ -90,8 +92,8 @@ async def get_sas_token(
     try:
         upload_url, blob_name = _blob_service.generate_upload_sas(filename)
     except Exception as exc:
-        logger.error("sas_token_error", error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar SAS token: {exc}") from exc
+        logger.error("sas_token_error", error=str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro ao gerar URL de upload.") from exc
 
     logger.info("sas_token_issued", filename=filename, blob_name=blob_name)
     return {"upload_url": upload_url, "blob_name": blob_name}
@@ -102,8 +104,8 @@ async def get_sas_token(
 # ---------------------------------------------------------------------------
 
 class ProcessRequest(BaseModel):
-    blob_name: str
-    original_filename: str
+    blob_name: str = Field(..., max_length=256, pattern=r"^[a-zA-Z0-9._\-/]+$")
+    original_filename: str = Field(..., max_length=256)
 
 
 @router.post("/ingest/process")
@@ -118,7 +120,8 @@ async def process_blob(
     Retorna imediatamente com job_id para polling via GET /ingest/status/{job_id}.
     """
     job_id = str(uuid.uuid4())
-    _jobs[job_id] = {"status": "processing"}
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "processing"}
 
     background_tasks.add_task(
         _run_ingest,
@@ -136,11 +139,13 @@ def _run_ingest(job_id: str, blob_name: str, original_filename: str) -> None:
     try:
         read_url = _blob_service.get_read_url(blob_name)
         result = _ingest_service.ingest_from_url(read_url, original_filename)
-        _jobs[job_id] = {"status": "done", "result": result}
+        with _jobs_lock:
+            _jobs[job_id] = {"status": "done", "result": result}
         logger.info("process_job_done", job_id=job_id, n_chunks=result["n_chunks"])
     except Exception as exc:
-        _jobs[job_id] = {"status": "error", "error": str(exc)}
-        logger.error("process_job_error", job_id=job_id, error=str(exc))
+        with _jobs_lock:
+            _jobs[job_id] = {"status": "error", "error": str(exc)}
+        logger.error("process_job_error", job_id=job_id, error=str(exc), exc_info=True)
     finally:
         _blob_service.delete_blob(blob_name)
 
@@ -155,7 +160,8 @@ async def get_job_status(
     _user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Retorna status do job: processing | done | error."""
-    job = _jobs.get(job_id)
+    with _jobs_lock:
+        job = _jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado.")
 

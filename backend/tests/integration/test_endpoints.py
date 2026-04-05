@@ -201,6 +201,294 @@ def test_ingest_valid_file_returns_200(client):
     assert response.json()["status"] == "ok"
 
 
+def test_ingest_arquivo_grande_retorna_413(client):
+    """POST /ingest com arquivo acima do limite deve retornar 413."""
+    token = _make_valid_token()
+    big_file = b"x" * (1025 * 1024 * 1024)  # > 1024 MB
+
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        response = client.post(
+            "/ingest",
+            files={"file": ("aula.mp3", big_file, "audio/mpeg")},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 413
+
+
+def test_ingest_service_error_retorna_500(client):
+    """POST /ingest com erro no IngestService deve retornar 500 com mensagem genérica."""
+    token = _make_valid_token()
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+        patch("backend.api.routes.ingest._ingest_service") as mock_ingest,
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        mock_ingest.ingest.side_effect = RuntimeError("AssemblyAI falhou")
+        response = client.post(
+            "/ingest",
+            files={"file": ("aula.mp3", b"audio", "audio/mpeg")},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Erro ao processar arquivo."
+
+
+def test_get_sas_token_formato_invalido_retorna_400(client):
+    """GET /ingest/sas-token com extensão não suportada deve retornar 400."""
+    token = _make_valid_token()
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        response = client.get(
+            "/ingest/sas-token",
+            params={"filename": "documento.pdf"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 400
+
+
+def test_get_sas_token_sucesso_retorna_url_e_blob_name(client):
+    """GET /ingest/sas-token com arquivo válido deve retornar upload_url e blob_name."""
+    token = _make_valid_token()
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+        patch("backend.api.routes.ingest._blob_service") as mock_blob,
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        mock_blob.generate_upload_sas.return_value = ("https://sas.url/video.mp4", "uuid/video.mp4")
+        response = client.get(
+            "/ingest/sas-token",
+            params={"filename": "video.mp4"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 200
+    assert response.json()["upload_url"] == "https://sas.url/video.mp4"
+    assert response.json()["blob_name"] == "uuid/video.mp4"
+
+
+def test_get_sas_token_erro_no_servico_retorna_500(client):
+    """GET /ingest/sas-token com erro no BlobService deve retornar 500 com mensagem genérica."""
+    token = _make_valid_token()
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+        patch("backend.api.routes.ingest._blob_service") as mock_blob,
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        mock_blob.generate_upload_sas.side_effect = Exception("Azure error")
+        response = client.get(
+            "/ingest/sas-token",
+            params={"filename": "video.mp4"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Erro ao gerar URL de upload."
+
+
+def test_process_blob_cria_job_e_retorna_job_id(client):
+    """POST /ingest/process deve criar job e retornar job_id imediatamente."""
+    token = _make_valid_token()
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+        patch("backend.api.routes.ingest._blob_service"),
+        patch("backend.api.routes.ingest._ingest_service"),
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        response = client.post(
+            "/ingest/process",
+            json={"blob_name": "uuid/video.mp4", "original_filename": "video.mp4"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert "job_id" in body
+    assert body["status"] == "processing"
+
+
+def test_process_blob_blob_name_invalido_retorna_422(client):
+    """POST /ingest/process com blob_name contendo caracteres inválidos deve retornar 422."""
+    token = _make_valid_token()
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        response = client.post(
+            "/ingest/process",
+            json={"blob_name": "uuid/video file@invalid.mp4", "original_filename": "video.mp4"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 422
+
+
+def test_get_job_status_nao_encontrado_retorna_404(client):
+    """GET /ingest/status/{job_id} com ID inexistente deve retornar 404."""
+    token = _make_valid_token()
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        response = client.get(
+            "/ingest/status/id-que-nao-existe",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 404
+
+
+def test_get_job_status_processing(client):
+    """GET /ingest/status deve retornar 'processing' para job em andamento."""
+    import backend.api.routes.ingest as ingest_module
+
+    token = _make_valid_token()
+    job_id = "job-em-andamento"
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+        patch.dict(ingest_module._jobs, {job_id: {"status": "processing"}}),
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        response = client.get(
+            f"/ingest/status/{job_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "processing"
+
+
+def test_get_job_status_done(client):
+    """GET /ingest/status deve retornar resultado completo para job concluído."""
+    import backend.api.routes.ingest as ingest_module
+
+    token = _make_valid_token()
+    job_id = "job-concluido"
+    done_job = {
+        "status": "done",
+        "result": {"filename": "aula.mp3", "n_chunks": 8, "duration_sec": 600.0},
+    }
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+        patch.dict(ingest_module._jobs, {job_id: done_job}),
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        response = client.get(
+            f"/ingest/status/{job_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "done"
+    assert body["n_chunks"] == 8
+    assert body["filename"] == "aula.mp3"
+
+
+def test_get_job_status_error(client):
+    """GET /ingest/status deve retornar 500 para job com erro."""
+    import backend.api.routes.ingest as ingest_module
+
+    token = _make_valid_token()
+    job_id = "job-com-erro"
+    with (
+        patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
+        patch("backend.api.auth.settings") as mock_auth_settings,
+        patch.dict(ingest_module._jobs, {job_id: {"status": "error", "error": "Falhou"}}),
+    ):
+        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_auth_settings.azure_client_id = CLIENT_ID
+        mock_auth_settings.azure_tenant_id = TENANT_ID
+        mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        response = client.get(
+            f"/ingest/status/{job_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 500
+
+
+def test_run_ingest_sucesso_atualiza_job_para_done():
+    """_run_ingest bem-sucedido deve marcar job como done com resultado."""
+    import backend.api.routes.ingest as ingest_module
+
+    test_jobs = {"job-1": {"status": "processing"}}
+    mock_blob = MagicMock()
+    mock_blob.get_read_url.return_value = "https://sas.url"
+    mock_blob.delete_blob.return_value = None
+    mock_ingest = MagicMock()
+    mock_ingest.ingest_from_url.return_value = {
+        "filename": "video.mp4", "n_chunks": 5, "duration_sec": 300.0
+    }
+
+    with (
+        patch.object(ingest_module, "_jobs", test_jobs),
+        patch.object(ingest_module, "_blob_service", mock_blob),
+        patch.object(ingest_module, "_ingest_service", mock_ingest),
+    ):
+        ingest_module._run_ingest("job-1", "uuid/video.mp4", "video.mp4")
+
+    assert test_jobs["job-1"]["status"] == "done"
+    assert test_jobs["job-1"]["result"]["n_chunks"] == 5
+    mock_blob.delete_blob.assert_called_once_with("uuid/video.mp4")
+
+
+def test_run_ingest_erro_atualiza_job_para_error():
+    """_run_ingest com falha deve marcar job como error e sempre deletar o blob."""
+    import backend.api.routes.ingest as ingest_module
+
+    test_jobs = {"job-2": {"status": "processing"}}
+    mock_blob = MagicMock()
+    mock_blob.get_read_url.side_effect = Exception("Blob inacessível")
+    mock_ingest = MagicMock()
+
+    with (
+        patch.object(ingest_module, "_jobs", test_jobs),
+        patch.object(ingest_module, "_blob_service", mock_blob),
+        patch.object(ingest_module, "_ingest_service", mock_ingest),
+    ):
+        ingest_module._run_ingest("job-2", "uuid/video.mp4", "video.mp4")
+
+    assert test_jobs["job-2"]["status"] == "error"
+    mock_blob.delete_blob.assert_called_once_with("uuid/video.mp4")
+
+
 def test_chat_stream_with_wrong_audience_returns_401(client):
     """POST /chat/stream com audience errado deve retornar 401 (não 200)."""
     token = _make_valid_token(audience="00000003-0000-0000-c000-000000000000")

@@ -4,7 +4,7 @@ from typing import Any
 import structlog
 from fastembed.sparse.bm25 import Bm25
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import NamedSparseVector, NamedVector, SparseVector
+from qdrant_client.http.models import FieldCondition, Filter, MatchValue, SparseVector
 from sentence_transformers import SentenceTransformer
 
 from backend.core.config import settings
@@ -44,7 +44,8 @@ class KnowledgeService:
                     seen.add(src)
                     sources.append(src)
             return sorted(sources)
-        except Exception:
+        except Exception as exc:
+            logger.error("list_sources_failed", error=str(exc))
             return []
 
     def search(self, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict[str, Any]]:
@@ -69,24 +70,20 @@ class KnowledgeService:
         )
 
         fetch_limit = top_k * 3
-        dense_hits = self._client.search(
+        dense_hits = self._client.query_points(
             collection_name=COLLECTION_NAME,
-            query_vector=NamedVector(name="dense", vector=q_dense),
+            query=q_dense,
+            using="dense",
             limit=fetch_limit,
             with_payload=True,
-        )
-        sparse_hits = self._client.search(
+        ).points
+        sparse_hits = self._client.query_points(
             collection_name=COLLECTION_NAME,
-            query_vector=NamedSparseVector(
-                name="sparse",
-                vector=SparseVector(
-                    indices=q_sparse.indices,
-                    values=q_sparse.values,
-                ),
-            ),
+            query=q_sparse,
+            using="sparse",
             limit=fetch_limit,
             with_payload=True,
-        )
+        ).points
 
         # RRF manual (k=60)
         k = 60
@@ -112,3 +109,37 @@ class KnowledgeService:
             }
             for sid in top_ids
         ]
+
+    def search_with_coverage(self, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict[str, Any]]:
+        """
+        Busca híbrida + garante ao menos 1 chunk por fonte indexada.
+
+        Para perguntas genéricas (ex: "liste os temas"), a busca semântica pode
+        não retornar chunks de todas as fontes. Este método complementa os
+        resultados com um chunk representativo de cada fonte não coberta.
+        """
+        results = self.search(query, top_k)
+        covered = {r["source"] for r in results}
+
+        for source in self.list_sources():
+            if source in covered:
+                continue
+            hits, _ = self._client.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[FieldCondition(key="source", match=MatchValue(value=source))]
+                ),
+                limit=1,
+                with_payload=True,
+                with_vectors=False,
+            )
+            if hits:
+                payload = hits[0].payload or {}
+                results.append({
+                    "text": payload.get("text", ""),
+                    "source": payload.get("source", ""),
+                    "score": 0.0,
+                })
+                covered.add(source)
+
+        return results
