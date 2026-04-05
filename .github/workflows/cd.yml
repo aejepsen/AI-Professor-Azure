@@ -1,9 +1,7 @@
 # =============================================================================
 # CD — Deploy para produção
-# Roda em push para main (após PR aprovado e mergeado):
-#   1. Testes Python + Docker smoke test
-#   2. Build + push imagem para ghcr.io
-#   3. Deploy no Azure Container App
+# Backend: roda apenas quando backend/** ou o próprio workflow muda
+# Frontend: roda apenas quando frontend/** muda
 # =============================================================================
 name: CD
 
@@ -17,11 +15,34 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Testes (gate obrigatório antes do deploy)
+  # Detecta quais partes mudaram
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/cd.yml'
+            frontend:
+              - 'frontend/**'
+
+  # ---------------------------------------------------------------------------
+  # Testes Python — só quando backend mudou
   # ---------------------------------------------------------------------------
   test:
     name: Tests
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -63,12 +84,13 @@ jobs:
         run: pytest tests/docker/ -v -m docker --tb=short
 
   # ---------------------------------------------------------------------------
-  # Build + Push imagem para ghcr.io
+  # Build + Push imagem — só quando backend mudou
   # ---------------------------------------------------------------------------
   build-push:
     name: Build & Push
     runs-on: ubuntu-latest
-    needs: test
+    needs: [changes, test]
+    if: needs.changes.outputs.backend == 'true'
     outputs:
       image: ${{ steps.meta.outputs.tags }}
 
@@ -99,12 +121,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   # ---------------------------------------------------------------------------
-  # Deploy no Azure Container App
+  # Deploy backend — só quando backend mudou
   # ---------------------------------------------------------------------------
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs: build-push
+    needs: [changes, build-push]
+    if: needs.changes.outputs.backend == 'true'
 
     steps:
       - name: Azure login
@@ -136,12 +159,13 @@ jobs:
           exit 1
 
   # ---------------------------------------------------------------------------
-  # Deploy do frontend no Azure Static Web Apps
+  # Deploy frontend — só quando frontend mudou
   # ---------------------------------------------------------------------------
   frontend-deploy:
     name: Frontend Deploy
     runs-on: ubuntu-latest
-    needs: test
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
 
     steps:
       - uses: actions/checkout@v4
