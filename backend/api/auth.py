@@ -51,7 +51,8 @@ async def get_current_user(
 
     try:
         unverified = jwt.get_unverified_claims(token)
-        logger.info("jwt_claims_preview", aud=unverified.get("aud"), iss=unverified.get("iss"))
+        expected_aud = settings.azure_client_id
+        logger.info("jwt_claims_preview", aud=unverified.get("aud"), iss=unverified.get("iss"), expected_aud=expected_aud, match=unverified.get("aud") == expected_aud)
         jwks = await _get_jwks()
         claims: dict[str, Any] = jwt.decode(
             token,
