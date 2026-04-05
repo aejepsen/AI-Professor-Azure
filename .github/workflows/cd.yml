@@ -56,6 +56,10 @@ jobs:
 
       - name: Docker smoke test
         working-directory: backend
+        env:
+          AZURE_STORAGE_ACCOUNT_NAME: fake-storage
+          AZURE_STORAGE_ACCOUNT_KEY: ZmFrZWtleWZha2VrZXlmYWtla2V5ZmFrZWtleWZha2VrZXlmYWtla2V5ZmFrZWtleWZha2VrZXlmYWtla2V5Zg==
+          AZURE_STORAGE_CONTAINER: uploads
         run: pytest tests/docker/ -v -m docker --tb=short
 
   # ---------------------------------------------------------------------------
