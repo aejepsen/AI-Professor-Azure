@@ -4,7 +4,7 @@ from typing import Any
 import structlog
 from fastembed.sparse.bm25 import Bm25
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import SparseVector
+from qdrant_client.http.models import NamedSparseVector, NamedVector, SparseVector
 from sentence_transformers import SentenceTransformer
 
 from backend.core.config import settings
@@ -49,20 +49,24 @@ class KnowledgeService:
         )
 
         fetch_limit = top_k * 3
-        dense_hits = self._client.query_points(
+        dense_hits = self._client.search(
             collection_name=COLLECTION_NAME,
-            query=q_dense,
-            using="dense",
+            query_vector=NamedVector(name="dense", vector=q_dense),
             limit=fetch_limit,
             with_payload=True,
-        ).points
-        sparse_hits = self._client.query_points(
+        )
+        sparse_hits = self._client.search(
             collection_name=COLLECTION_NAME,
-            query=q_sparse,
-            using="sparse",
+            query_vector=NamedSparseVector(
+                name="sparse",
+                vector=SparseVector(
+                    indices=q_sparse.indices,
+                    values=q_sparse.values,
+                ),
+            ),
             limit=fetch_limit,
             with_payload=True,
-        ).points
+        )
 
         # RRF manual (k=60)
         k = 60

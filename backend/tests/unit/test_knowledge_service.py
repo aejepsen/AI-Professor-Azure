@@ -15,18 +15,12 @@ def _make_hit(text: str, source: str, score: float = 0.95) -> MagicMock:
     return hit
 
 
-def _query_points_result(hits: list) -> MagicMock:
-    result = MagicMock()
-    result.points = hits
-    return result
-
-
 @pytest.fixture()
 def mock_qdrant():
     with patch("backend.services.knowledge_service.QdrantClient") as MockClient:
         client = MagicMock()
         # Por padrão retorna listas vazias para ambas as chamadas
-        client.query_points.return_value = _query_points_result([])
+        client.search.return_value = []
         MockClient.return_value = client
         yield client
 
@@ -56,7 +50,7 @@ def service(mock_qdrant):
 def test_search_returns_results(service, mock_qdrant):
     """Busca com query válida deve retornar lista de resultados via RRF."""
     hit = _make_hit("Férias são 30 dias corridos.", "manual_ferias.pdf", score=0.95)
-    mock_qdrant.query_points.return_value = _query_points_result([hit])
+    mock_qdrant.search.return_value = [hit]
 
     results = service.search("Quantos dias de férias tenho?")
 
@@ -69,13 +63,13 @@ def test_search_empty_query_returns_empty(service, mock_qdrant):
     """Query vazia deve retornar lista vazia sem chamar Qdrant."""
     results = service.search("")
 
-    mock_qdrant.query_points.assert_not_called()
+    mock_qdrant.search.assert_not_called()
     assert results == []
 
 
 def test_search_qdrant_error_raises(service, mock_qdrant):
     """Erro do Qdrant deve ser propagado como exceção."""
-    mock_qdrant.query_points.side_effect = Exception("Qdrant connection timeout")
+    mock_qdrant.search.side_effect = Exception("Qdrant connection timeout")
 
     with pytest.raises(Exception, match="Qdrant connection timeout"):
         service.search("Como abrir um chamado?")
@@ -84,7 +78,7 @@ def test_search_qdrant_error_raises(service, mock_qdrant):
 def test_search_limits_results(service, mock_qdrant):
     """Busca deve respeitar top_k — retorna no máximo N resultados via RRF."""
     hits = [_make_hit(f"texto {i}", f"fonte_{i}.pdf", score=0.9 - i * 0.1) for i in range(10)]
-    mock_qdrant.query_points.return_value = _query_points_result(hits)
+    mock_qdrant.search.return_value = hits
 
     results = service.search("test query", top_k=3)
 
@@ -98,9 +92,9 @@ def test_search_rrf_merges_dense_and_sparse(service, mock_qdrant):
 
     # Primeira chamada (dense): shared + exclusive
     # Segunda chamada (sparse): só shared
-    mock_qdrant.query_points.side_effect = [
-        _query_points_result([shared_hit, exclusive_hit]),
-        _query_points_result([shared_hit]),
+    mock_qdrant.search.side_effect = [
+        [shared_hit, exclusive_hit],
+        [shared_hit],
     ]
 
     results = service.search("query teste", top_k=2)
