@@ -38,3 +38,10 @@ dist/
 
 # Videos
 *.mkv
+
+# Local tooling
+.agents/
+.claude/
+.continue/
+skills-lock.json
+AI-Professor/
