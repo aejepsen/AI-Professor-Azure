@@ -68,6 +68,7 @@ export class ApiService {
     file: File,
     token: string,
     onProgress: (percent: number) => void,
+    onPhase: (phase: 'upload' | 'processing') => void,
   ): Promise<IngestResult> {
     // 1. Obter SAS token do backend
     const sasRes = await fetch(
@@ -79,30 +80,50 @@ export class ApiService {
     const { upload_url, blob_name } = sasJson as { upload_url: string; blob_name: string };
 
     // 2. Upload direto para o Azure Blob Storage com progresso
+    onPhase('upload');
     const blobClient = new BlockBlobClient(upload_url);
     await blobClient.uploadData(file, {
       onProgress: (ev) => {
         const percent = Math.round((ev.loadedBytes / file.size) * 100);
-        onProgress(Math.min(percent, 99));
+        onProgress(Math.min(percent, 100));
       },
       blobHTTPHeaders: { blobContentType: file.type || 'application/octet-stream' },
     });
 
-    onProgress(99);
-
-    // 3. Solicitar processamento ao backend
+    // 3. Solicitar processamento em background — retorna job_id imediatamente
+    onPhase('processing');
     const processRes = await fetch(`${BACKEND_URL}/ingest/process`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ blob_name, original_filename: file.name }),
     });
     const processJson = await processRes.json();
     if (!processRes.ok) throw new Error(processJson.detail ?? `Erro ${processRes.status}`);
 
-    onProgress(100);
-    return processJson as IngestResult;
+    const { job_id } = processJson as { job_id: string };
+
+    // 4. Polling até concluir
+    return this._pollJobStatus(job_id, token);
+  }
+
+  private async _pollJobStatus(jobId: string, token: string): Promise<IngestResult> {
+    const INTERVAL_MS = 5000;
+    const MAX_ATTEMPTS = 360; // 30 minutos
+
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      await new Promise((r) => setTimeout(r, INTERVAL_MS));
+
+      const res = await fetch(`${BACKEND_URL}/ingest/status/${jobId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.detail ?? `Erro ${res.status}`);
+      if (json.status === 'done') return json as IngestResult;
+      if (json.status === 'error') throw new Error(json.detail ?? 'Erro no processamento.');
+      // status === 'processing' → continua polling
+    }
+
+    throw new Error('Timeout: processamento demorou mais de 30 minutos.');
   }
 }

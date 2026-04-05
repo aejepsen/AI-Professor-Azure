@@ -38,14 +38,20 @@ export class IngestComponent {
     }
 
     this.loading = true;
-    this.phase = 'upload';
     try {
       const token = await this.auth.getToken();
-      const result = await this.api.ingestViaBlob(file, token!, (percent) => {
-        this.uploadPercent = percent;
-        if (percent >= 99) this.phase = 'processing';
-        this.cdr.detectChanges();
-      });
+      const result = await this.api.ingestViaBlob(
+        file,
+        token!,
+        (percent) => {
+          this.uploadPercent = percent;
+          this.cdr.detectChanges();
+        },
+        (phase) => {
+          this.phase = phase;
+          this.cdr.detectChanges();
+        },
+      );
       this.nChunks = result.n_chunks;
       this.filename = result.filename;
       this.success = true;

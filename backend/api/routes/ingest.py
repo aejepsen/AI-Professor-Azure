@@ -1,8 +1,9 @@
 """Endpoints de ingestão de vídeo/áudio."""
+import uuid
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from backend.api.auth import get_current_user
@@ -18,6 +19,9 @@ _blob_service = BlobService()
 ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".mp3", ".wav", ".m4a", ".webm"}
 MAX_FILE_SIZE_MB = 1024
 
+# Armazena status dos jobs em memória (suficiente para instância única)
+_jobs: dict[str, dict[str, Any]] = {}
+
 
 # ---------------------------------------------------------------------------
 # POST /ingest — upload direto (mantido para compatibilidade)
@@ -28,11 +32,7 @@ async def ingest_video(
     file: UploadFile,
     _user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """
-    Recebe vídeo/áudio, transcreve via AssemblyAI e indexa no Qdrant.
-
-    Requer Bearer token válido do Azure Entra ID.
-    """
+    """Recebe vídeo/áudio, transcreve via AssemblyAI e indexa no Qdrant."""
     import os
 
     ext = os.path.splitext(file.filename or "")[1].lower()
@@ -77,12 +77,7 @@ async def get_sas_token(
     filename: str = Query(..., description="Nome do arquivo a ser enviado"),
     _user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, str]:
-    """
-    Retorna uma SAS URL de escrita para o Azure Blob Storage.
-
-    O frontend usa essa URL para enviar o arquivo diretamente ao blob,
-    sem passar pelo backend, obtendo progresso de upload real.
-    """
+    """Retorna SAS URL de escrita para upload direto ao Azure Blob Storage."""
     import os
 
     ext = os.path.splitext(filename)[1].lower()
@@ -103,7 +98,7 @@ async def get_sas_token(
 
 
 # ---------------------------------------------------------------------------
-# POST /ingest/process — dispara transcrição a partir do blob já enviado
+# POST /ingest/process — dispara processamento em background e retorna job_id
 # ---------------------------------------------------------------------------
 
 class ProcessRequest(BaseModel):
@@ -114,28 +109,67 @@ class ProcessRequest(BaseModel):
 @router.post("/ingest/process")
 async def process_blob(
     body: ProcessRequest,
+    background_tasks: BackgroundTasks,
     _user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """
-    Gera SAS de leitura, aciona AssemblyAI via URL e indexa no Qdrant.
+    Registra job e inicia transcrição + indexação em background.
 
-    Após o processamento, o blob é deletado.
+    Retorna imediatamente com job_id para polling via GET /ingest/status/{job_id}.
     """
-    logger.info("process_blob_start", blob_name=body.blob_name, filename=body.original_filename)
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "processing"}
 
+    background_tasks.add_task(
+        _run_ingest,
+        job_id=job_id,
+        blob_name=body.blob_name,
+        original_filename=body.original_filename,
+    )
+
+    logger.info("process_job_started", job_id=job_id, blob_name=body.blob_name)
+    return {"job_id": job_id, "status": "processing"}
+
+
+def _run_ingest(job_id: str, blob_name: str, original_filename: str) -> None:
+    """Executado em background: transcreve via URL SAS e indexa no Qdrant."""
     try:
-        read_url = _blob_service.get_read_url(body.blob_name)
-        result = _ingest_service.ingest_from_url(read_url, body.original_filename)
+        read_url = _blob_service.get_read_url(blob_name)
+        result = _ingest_service.ingest_from_url(read_url, original_filename)
+        _jobs[job_id] = {"status": "done", "result": result}
+        logger.info("process_job_done", job_id=job_id, n_chunks=result["n_chunks"])
     except Exception as exc:
-        logger.error("process_blob_error", error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Erro no processamento: {exc}") from exc
+        _jobs[job_id] = {"status": "error", "error": str(exc)}
+        logger.error("process_job_error", job_id=job_id, error=str(exc))
     finally:
-        _blob_service.delete_blob(body.blob_name)
+        _blob_service.delete_blob(blob_name)
 
-    return {
-        "status": "ok",
-        "filename": result["filename"],
-        "n_chunks": result["n_chunks"],
-        "duration_sec": result["duration_sec"],
-        "message": f"{result['n_chunks']} chunks indexados com sucesso.",
-    }
+
+# ---------------------------------------------------------------------------
+# GET /ingest/status/{job_id} — consulta status do job
+# ---------------------------------------------------------------------------
+
+@router.get("/ingest/status/{job_id}")
+async def get_job_status(
+    job_id: str,
+    _user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Retorna status do job: processing | done | error."""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado.")
+
+    if job["status"] == "done":
+        r = job["result"]
+        return {
+            "status": "done",
+            "filename": r["filename"],
+            "n_chunks": r["n_chunks"],
+            "duration_sec": r["duration_sec"],
+            "message": f"{r['n_chunks']} chunks indexados com sucesso.",
+        }
+
+    if job["status"] == "error":
+        raise HTTPException(status_code=500, detail=job["error"])
+
+    return {"status": "processing"}
