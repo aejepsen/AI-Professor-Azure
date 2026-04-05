@@ -1,3 +1,4 @@
+"""Configurações da aplicação lidas de variáveis de ambiente."""
 from pydantic_settings import BaseSettings
 
 
