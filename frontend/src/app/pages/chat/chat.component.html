@@ -8,15 +8,22 @@
     }
   </div>
 
-  <form class="chat__form" (submit)="$event.preventDefault(); send()">
-    <textarea
-      class="chat__input"
-      [(ngModel)]="query"
-      name="query"
-      placeholder="Faça uma pergunta sobre a aula..."
-      rows="2"
-      (keydown.enter)="$event.preventDefault(); send()"
-    ></textarea>
-    <button class="chat__send" type="submit" [disabled]="!query.trim()">Enviar</button>
-  </form>
+  @if (auth.isLoggedIn()) {
+    <form class="chat__form" (submit)="$event.preventDefault(); send()">
+      <textarea
+        class="chat__input"
+        [(ngModel)]="query"
+        name="query"
+        placeholder="Faça uma pergunta sobre a aula..."
+        rows="2"
+        (keydown.enter)="$event.preventDefault(); send()"
+      ></textarea>
+      <button class="chat__send" type="submit" [disabled]="!query.trim()">Enviar</button>
+    </form>
+  } @else {
+    <div class="chat__login-prompt">
+      <p>Faça login para conversar com o Professor.</p>
+      <button class="chat__login-btn" (click)="auth.login()">Entrar com Microsoft</button>
+    </div>
+  }
 </div>

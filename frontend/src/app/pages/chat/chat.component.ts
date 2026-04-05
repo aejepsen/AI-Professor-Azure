@@ -13,7 +13,7 @@ import { AuthService } from '../../services/auth.service';
 })
 export class ChatComponent {
   private api = inject(ApiService);
-  private auth = inject(AuthService);
+  protected auth = inject(AuthService);
 
   messages: { role: 'user' | 'assistant'; text: string }[] = [];
   query = '';
