@@ -11,7 +11,7 @@ const msalInstance = new PublicClientApplication({
     authority: 'https://login.microsoftonline.com/d0900507-73c9-42c3-a8bf-a8eabdd611d8',
     redirectUri: window.location.origin,
   },
-  cache: { cacheLocation: 'sessionStorage' },
+  cache: { cacheLocation: 'localStorage' },
   system: {
     loggerOptions: {
       loggerCallback: (level, msg) => {
