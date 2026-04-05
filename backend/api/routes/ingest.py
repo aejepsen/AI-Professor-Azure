@@ -13,7 +13,7 @@ router = APIRouter()
 _ingest_service = IngestService()
 
 ALLOWED_EXTENSIONS = {".mkv", ".mp4", ".mp3", ".wav", ".m4a", ".webm"}
-MAX_FILE_SIZE_MB = 500
+MAX_FILE_SIZE_MB = 1024
 
 
 @router.post("/ingest")
