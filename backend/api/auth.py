@@ -50,6 +50,8 @@ async def get_current_user(
         return {"sub": "ragas-ci", "roles": ["eval"]}
 
     try:
+        unverified = jwt.get_unverified_claims(token)
+        logger.info("jwt_claims_preview", aud=unverified.get("aud"), iss=unverified.get("iss"))
         jwks = await _get_jwks()
         claims: dict[str, Any] = jwt.decode(
             token,
