@@ -3,7 +3,7 @@
     @for (msg of messages; track $index) {
       <div class="chat__bubble" [class.chat__bubble--user]="msg.role === 'user'" [class.chat__bubble--assistant]="msg.role === 'assistant'">
         <span class="chat__role">{{ msg.role === 'user' ? 'Você' : 'Professor' }}</span>
-        <p class="chat__text" [innerHTML]="msg.text"></p>
+        <div class="chat__text" [innerHTML]="md(msg.text)"></div>
       </div>
     }
   </div>

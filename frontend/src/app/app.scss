@@ -3,4 +3,7 @@
   z-index: 1;
   min-height: calc(100vh - 60px);
   padding: 1.5rem;
+  user-select: text;
+
+  * { user-select: text !important; }
 }

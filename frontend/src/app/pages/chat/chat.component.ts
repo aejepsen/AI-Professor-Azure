@@ -1,6 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { marked } from 'marked';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 
@@ -13,10 +14,15 @@ import { AuthService } from '../../services/auth.service';
 })
 export class ChatComponent {
   private api = inject(ApiService);
+  private cdr = inject(ChangeDetectorRef);
   protected auth = inject(AuthService);
 
   messages: { role: 'user' | 'assistant'; text: string }[] = [];
   query = '';
+
+  md(text: string): string {
+    return marked.parse(text) as string;
+  }
 
   async send() {
     if (!this.query.trim()) return;
@@ -30,8 +36,16 @@ export class ChatComponent {
     const assistantMsg = { role: 'assistant' as const, text: '' };
     this.messages.push(assistantMsg);
 
-    for await (const chunk of this.api.chat(q, token!)) {
-      assistantMsg.text += chunk;
+    try {
+      for await (const chunk of this.api.chat(q, token!)) {
+        console.log('[Chat] chunk:', chunk);
+        assistantMsg.text += chunk;
+        this.cdr.detectChanges();
+      }
+      console.log('[Chat] stream done');
+    } catch (err) {
+      console.error('[Chat] error:', err);
+      assistantMsg.text = 'Erro ao obter resposta.';
     }
   }
 }

@@ -24,10 +24,16 @@ const msalInstance = new PublicClientApplication({
 await msalInstance.initialize();
 
 // Processa o redirect de volta do login Microsoft e seta a conta ativa
-const redirectResult = await msalInstance.handleRedirectPromise();
-if (redirectResult?.account) {
-  msalInstance.setActiveAccount(redirectResult.account);
-} else {
+try {
+  const redirectResult = await msalInstance.handleRedirectPromise();
+  if (redirectResult?.account) {
+    msalInstance.setActiveAccount(redirectResult.account);
+  } else {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) msalInstance.setActiveAccount(accounts[0]);
+  }
+} catch (e) {
+  console.warn('[MSAL] handleRedirectPromise error:', e);
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) msalInstance.setActiveAccount(accounts[0]);
 }
