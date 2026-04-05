@@ -24,9 +24,11 @@ export class IngestComponent {
   filename = '';
   uploadPercent = 0;
   processingPercent = 0;
+  estimatedMinutes = 0;
   phase: 'upload' | 'processing' | '' = '';
 
   private _processingTimer: ReturnType<typeof setInterval> | null = null;
+  private _processingStartMs = 0;
 
   async onFileSelected(file: File) {
     this.error = '';
@@ -40,6 +42,7 @@ export class IngestComponent {
       return;
     }
 
+    this.estimatedMinutes = await this._estimateProcessingMinutes(file);
     this.loading = true;
     try {
       const token = await this.auth.getToken();
@@ -75,12 +78,31 @@ export class IngestComponent {
 
   private _startProcessingAnimation() {
     this.processingPercent = 0;
+    this._processingStartMs = Date.now();
+    const totalMs = this.estimatedMinutes * 60 * 1000 || 600_000; // fallback 10min
+
     this._processingTimer = setInterval(() => {
-      // Avança rápido no início, desacelera perto de 90%
-      const remaining = 90 - this.processingPercent;
-      this.processingPercent += remaining * 0.03;
+      const elapsed = Date.now() - this._processingStartMs;
+      // Progresso baseado no tempo estimado, limitado a 90%
+      this.processingPercent = Math.min((elapsed / totalMs) * 100, 90);
       this.cdr.detectChanges();
     }, 1500);
+  }
+
+  private async _estimateProcessingMinutes(file: File): Promise<number> {
+    try {
+      const durationSec = await new Promise<number>((resolve) => {
+        const el = document.createElement('video');
+        el.preload = 'metadata';
+        el.onloadedmetadata = () => { URL.revokeObjectURL(el.src); resolve(el.duration); };
+        el.onerror = () => resolve(0);
+        el.src = URL.createObjectURL(file);
+      });
+      // AssemblyAI universal-2 processa ~3x mais rápido que real-time
+      return Math.ceil(durationSec / 3 / 60);
+    } catch {
+      return 0;
+    }
   }
 
   private _stopProcessingAnimation() {
