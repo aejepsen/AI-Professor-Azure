@@ -47,6 +47,40 @@
     margin: 0 auto 0.75rem;
   }
 
+  &__phase {
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+  }
+
+  &__hint {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-top: 0.4rem;
+  }
+
+  &__progress-track {
+    width: 100%;
+    height: 6px;
+    background: var(--teal-border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 0.5rem 0 0.35rem;
+  }
+
+  &__progress-bar {
+    height: 100%;
+    background: var(--teal);
+    border-radius: 3px;
+    transition: width 0.2s ease;
+  }
+
+  &__percent {
+    font-size: 0.85rem;
+    color: var(--teal);
+    font-weight: 600;
+    margin-bottom: 0;
+  }
+
   &__success {
     color: var(--teal);
     font-weight: 500;

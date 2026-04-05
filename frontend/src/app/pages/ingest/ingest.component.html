@@ -7,7 +7,19 @@
   >
     @if (loading) {
       <div class="ingest__spinner"></div>
-      <p>Processando...</p>
+
+      @if (phase === 'upload') {
+        <p class="ingest__phase">Enviando para o servidor...</p>
+        <div class="ingest__progress-track">
+          <div class="ingest__progress-bar" [style.width.%]="uploadPercent"></div>
+        </div>
+        <p class="ingest__percent">{{ uploadPercent }}%</p>
+      } @else if (phase === 'processing') {
+        <p class="ingest__phase">Transcrevendo e indexando...</p>
+        <p class="ingest__hint">Isso pode levar alguns minutos dependendo da duração do áudio.</p>
+      } @else {
+        <p>Processando...</p>
+      }
     } @else if (success) {
       <div class="ingest__success">
         <p>✓ <strong>{{ filename }}</strong> indexado com <strong>{{ nChunks }}</strong> chunks.</p>
@@ -17,7 +29,7 @@
         <input type="file" hidden accept=".mkv,.mp4,.mp3,.wav,.m4a,.webm" (change)="onFileSelected($any($event.target).files[0])">
         <span class="ingest__icon">⬆</span>
         <span>Arraste um vídeo/áudio ou clique para selecionar</span>
-        <small>.mkv · .mp4 · .mp3 · .wav · .m4a · .webm · max 500 MB</small>
+        <small>.mkv · .mp4 · .mp3 · .wav · .m4a · .webm</small>
       </label>
     }
   </div>

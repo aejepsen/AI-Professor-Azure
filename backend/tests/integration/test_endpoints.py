@@ -54,6 +54,9 @@ def mock_settings_env(monkeypatch):
     monkeypatch.setenv("AZURE_CLIENT_ID", CLIENT_ID)
     monkeypatch.setenv("RAGAS_TEST_TOKEN", RAGAS_TOKEN)
     monkeypatch.setenv("ASSEMBLYAI_API_KEY", "fake-assemblyai-key")
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_NAME", "fake-storage")
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_KEY", "ZmFrZWtleWZha2VrZXlmYWtla2V5ZmFrZWtleWZha2VrZXlmYWtla2V5ZmFrZWtleWZha2VrZXlmYWtla2V5Zg==")
+    monkeypatch.setenv("AZURE_STORAGE_CONTAINER", "uploads")
 
 
 @pytest.fixture()
@@ -67,6 +70,7 @@ def client():
         patch("backend.services.ingest_service.Bm25"),
         patch("backend.services.chat_service.anthropic.Anthropic"),
         patch("backend.agents.rag_agent.build_rag_graph"),
+        patch("backend.services.blob_service.BlobServiceClient"),
     ):
         from backend.api.main import app
         return TestClient(app)

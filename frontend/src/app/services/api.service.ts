@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { BlockBlobClient } from '@azure/storage-blob';
 
 const BACKEND_URL = 'https://ai-professor-backend.bluedesert-c198f5d7.eastus.azurecontainerapps.io';
 
@@ -61,5 +62,47 @@ export class ApiService {
     const json = await res.json();
     if (!res.ok) throw new Error(json.detail ?? `Erro ${res.status}`);
     return json as IngestResult;
+  }
+
+  async ingestViaBlob(
+    file: File,
+    token: string,
+    onProgress: (percent: number) => void,
+  ): Promise<IngestResult> {
+    // 1. Obter SAS token do backend
+    const sasRes = await fetch(
+      `${BACKEND_URL}/ingest/sas-token?filename=${encodeURIComponent(file.name)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const sasJson = await sasRes.json();
+    if (!sasRes.ok) throw new Error(sasJson.detail ?? `Erro ${sasRes.status}`);
+    const { upload_url, blob_name } = sasJson as { upload_url: string; blob_name: string };
+
+    // 2. Upload direto para o Azure Blob Storage com progresso
+    const blobClient = new BlockBlobClient(upload_url);
+    await blobClient.uploadData(file, {
+      onProgress: (ev) => {
+        const percent = Math.round((ev.loadedBytes / file.size) * 100);
+        onProgress(Math.min(percent, 99));
+      },
+      blobHTTPHeaders: { blobContentType: file.type || 'application/octet-stream' },
+    });
+
+    onProgress(99);
+
+    // 3. Solicitar processamento ao backend
+    const processRes = await fetch(`${BACKEND_URL}/ingest/process`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ blob_name, original_filename: file.name }),
+    });
+    const processJson = await processRes.json();
+    if (!processRes.ok) throw new Error(processJson.detail ?? `Erro ${processRes.status}`);
+
+    onProgress(100);
+    return processJson as IngestResult;
   }
 }

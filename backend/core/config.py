@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     azure_client_id: str
     ragas_test_token: str
     assemblyai_api_key: str
+    azure_storage_account_name: str
+    azure_storage_account_key: str
+    azure_storage_container: str = "uploads"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

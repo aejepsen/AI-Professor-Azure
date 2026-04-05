@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -15,16 +15,21 @@ const ALLOWED = ['.mkv', '.mp4', '.mp3', '.wav', '.m4a', '.webm'];
 export class IngestComponent {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  private cdr = inject(ChangeDetectorRef);
 
   loading = false;
   success = false;
   error = '';
   nChunks = 0;
   filename = '';
+  uploadPercent = 0;
+  phase: 'upload' | 'processing' | '' = '';
 
   async onFileSelected(file: File) {
     this.error = '';
     this.success = false;
+    this.uploadPercent = 0;
+    this.phase = '';
 
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!ALLOWED.includes(ext)) {
@@ -33,9 +38,14 @@ export class IngestComponent {
     }
 
     this.loading = true;
+    this.phase = 'upload';
     try {
       const token = await this.auth.getToken();
-      const result = await this.api.ingest(file, token!);
+      const result = await this.api.ingestViaBlob(file, token!, (percent) => {
+        this.uploadPercent = percent;
+        if (percent >= 99) this.phase = 'processing';
+        this.cdr.detectChanges();
+      });
       this.nChunks = result.n_chunks;
       this.filename = result.filename;
       this.success = true;
@@ -43,6 +53,8 @@ export class IngestComponent {
       this.error = err.message ?? 'Erro ao processar arquivo.';
     } finally {
       this.loading = false;
+      this.phase = '';
+      this.cdr.detectChanges();
     }
   }
 

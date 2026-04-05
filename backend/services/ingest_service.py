@@ -56,6 +56,22 @@ class IngestService:
         logger.info("ingest_done", filename=filename, n_chunks=len(chunks))
         return {"filename": filename, "n_chunks": len(chunks), "duration_sec": duration}
 
+    def ingest_from_url(self, url: str, filename: str) -> dict[str, Any]:
+        """
+        Pipeline via URL: AssemblyAI busca o áudio diretamente da URL (Blob SAS).
+
+        Returns:
+            Dict com n_chunks indexados e duração da transcrição.
+        """
+        logger.info("ingest_from_url_start", filename=filename)
+
+        transcript_text, duration = self._transcribe_url(url, filename)
+        chunks = list(self._chunk(transcript_text))
+        self._index(chunks, source=filename)
+
+        logger.info("ingest_from_url_done", filename=filename, n_chunks=len(chunks))
+        return {"filename": filename, "n_chunks": len(chunks), "duration_sec": duration}
+
     def _transcribe(self, file_bytes: bytes, filename: str) -> tuple[str, float]:
         """Envia arquivo para AssemblyAI e retorna transcrição + duração."""
         with tempfile.NamedTemporaryFile(suffix=f"_{filename}", delete=False) as tmp:
@@ -71,6 +87,19 @@ class IngestService:
 
         duration = transcript.audio_duration or 0.0
         logger.info("transcription_done", duration_sec=duration, words=len((transcript.text or "").split()))
+        return transcript.text or "", duration
+
+    def _transcribe_url(self, url: str, filename: str) -> tuple[str, float]:
+        """AssemblyAI busca o áudio diretamente da URL SAS e retorna transcrição + duração."""
+        config = aai.TranscriptionConfig(language_code="pt")
+        transcriber = aai.Transcriber(config=config)
+        transcript = transcriber.transcribe(url)
+
+        if transcript.status == aai.TranscriptStatus.error:
+            raise RuntimeError(f"AssemblyAI error: {transcript.error}")
+
+        duration = transcript.audio_duration or 0.0
+        logger.info("transcription_url_done", filename=filename, duration_sec=duration, words=len((transcript.text or "").split()))
         return transcript.text or "", duration
 
     def _chunk(self, text: str) -> Generator[str, None, None]:
