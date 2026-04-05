@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { Component, NgZone, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -15,7 +15,7 @@ const ALLOWED = ['.mkv', '.mp4', '.mp3', '.wav', '.m4a', '.webm'];
 export class IngestComponent {
   private api = inject(ApiService);
   private auth = inject(AuthService);
-  private cdr = inject(ChangeDetectorRef);
+  private zone = inject(NgZone);
 
   loading = false;
   success = false;
@@ -44,12 +44,10 @@ export class IngestComponent {
         file,
         token!,
         (percent) => {
-          this.uploadPercent = percent;
-          this.cdr.detectChanges();
+          this.zone.run(() => { this.uploadPercent = percent; });
         },
         (phase) => {
-          this.phase = phase;
-          this.cdr.detectChanges();
+          this.zone.run(() => { this.phase = phase; });
         },
       );
       this.nChunks = result.n_chunks;
@@ -58,9 +56,7 @@ export class IngestComponent {
     } catch (err: any) {
       this.error = err.message ?? 'Erro ao processar arquivo.';
     } finally {
-      this.loading = false;
-      this.phase = '';
-      this.cdr.detectChanges();
+      this.zone.run(() => { this.loading = false; this.phase = ''; });
     }
   }
 
