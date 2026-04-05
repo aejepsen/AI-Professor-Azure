@@ -22,10 +22,10 @@ export class AuthService {
   }
 
   async getToken(): Promise<string | null> {
-    const accounts = this.msal.getAllAccounts();
-    if (accounts.length === 0) return null;
+    const account = this.msal.getActiveAccount() ?? this.msal.getAllAccounts()[0];
+    if (!account) return null;
 
-    const request: SilentRequest = { scopes: TOKEN_SCOPES, account: accounts[0] };
+    const request: SilentRequest = { scopes: TOKEN_SCOPES, account };
     const result = await this.msal.acquireTokenSilent(request);
     return result.accessToken;
   }
