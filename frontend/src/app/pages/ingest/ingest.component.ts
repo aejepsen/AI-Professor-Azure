@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -15,6 +15,7 @@ const ALLOWED = ['.mkv', '.mp4', '.mp3', '.wav', '.m4a', '.webm'];
 export class IngestComponent {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  private cdr = inject(ChangeDetectorRef);
 
   loading = false;
   success = false;
@@ -42,8 +43,8 @@ export class IngestComponent {
       const result = await this.api.ingestViaBlob(
         file,
         token!,
-        (percent) => { this.uploadPercent = percent; },
-        (phase) => { this.phase = phase; },
+        (percent) => { this.uploadPercent = percent; this.cdr.detectChanges(); },
+        (phase) => { this.phase = phase; this.cdr.detectChanges(); },
       );
       this.nChunks = result.n_chunks;
       this.filename = result.filename;
