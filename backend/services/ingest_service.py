@@ -78,10 +78,7 @@ class IngestService:
             tmp.write(file_bytes)
             tmp_path = tmp.name
 
-        config = aai.TranscriptionConfig(
-            speech_model=aai.SpeechModel.best,
-            language_code="pt",
-        )
+        config = aai.TranscriptionConfig(language_code="pt")
         transcriber = aai.Transcriber(config=config)
         transcript = transcriber.transcribe(tmp_path)
 
