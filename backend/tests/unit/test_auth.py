@@ -43,8 +43,8 @@ OTHER_PRIVATE_KEY_PEM: str = _RSA_OTHER_KEY.private_bytes(
 
 
 def _make_token(
-    audience: str = f"api://{CLIENT_ID}/access_as_user",
-    issuer: str = f"https://sts.windows.net/{TENANT_ID}/",
+    audience: str = f"api://{CLIENT_ID}",
+    issuer: str = f"https://login.microsoftonline.com/{TENANT_ID}/v2.0",
     expired: bool = False,
     private_key: str = PRIVATE_KEY_PEM,
 ) -> str:

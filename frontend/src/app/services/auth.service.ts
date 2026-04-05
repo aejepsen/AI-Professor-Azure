@@ -14,7 +14,7 @@ export class AuthService {
   }
 
   login(): void {
-    this.msal.loginRedirect({ scopes: TOKEN_SCOPES });
+    this.msal.loginRedirect({ scopes: TOKEN_SCOPES }).catch(err => console.error('[MSAL] loginRedirect error:', err));
   }
 
   logout(): void {

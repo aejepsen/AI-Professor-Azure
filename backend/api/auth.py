@@ -55,8 +55,8 @@ async def get_current_user(
             token,
             jwks,
             algorithms=["RS256"],
-            audience=f"api://{settings.azure_client_id}/access_as_user",
-            issuer=f"https://sts.windows.net/{settings.azure_tenant_id}/",
+            audience=f"api://{settings.azure_client_id}",
+            issuer=f"https://login.microsoftonline.com/{settings.azure_tenant_id}/v2.0",
         )
         logger.info("jwt_validated", sub=claims.get("sub"))
         return claims

@@ -26,6 +26,7 @@ export class ChatComponent {
     this.query = '';
 
     const token = await this.auth.getToken();
+    console.log('[Chat] token:', token ? token.substring(0, 30) + '...' : null);
     const assistantMsg = { role: 'assistant' as const, text: '' };
     this.messages.push(assistantMsg);
 
