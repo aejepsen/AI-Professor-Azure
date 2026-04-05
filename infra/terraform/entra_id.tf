@@ -11,6 +11,7 @@
 resource "azuread_application" "api" {
   display_name     = "ai-professor-api"
   sign_in_audience = "AzureADMyOrg"
+  identifier_uris  = ["api://${azuread_application.api.client_id}"]
 
   api {
     requested_access_token_version = 2
