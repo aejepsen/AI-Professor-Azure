@@ -92,7 +92,7 @@ class IngestService:
     def _transcribe_url(self, url: str, filename: str) -> tuple[str, float]:
         """AssemblyAI busca o áudio diretamente da URL SAS e retorna transcrição + duração."""
         config = aai.TranscriptionConfig(
-            speech_model=aai.SpeechModel.best,
+            speech_models=["universal-2"],
             language_code="pt",
         )
         transcriber = aai.Transcriber(config=config)
