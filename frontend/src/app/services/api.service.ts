@@ -83,6 +83,8 @@ export class ApiService {
     onPhase('upload');
     const blobClient = new BlockBlobClient(upload_url);
     await blobClient.uploadData(file, {
+      blockSize: 8 * 1024 * 1024,  // 8 MB por bloco
+      concurrency: 2,               // 2 blocos em paralelo
       onProgress: (ev) => {
         const percent = Math.round((ev.loadedBytes / file.size) * 100);
         onProgress(Math.min(percent, 100));
