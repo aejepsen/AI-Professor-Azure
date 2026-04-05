@@ -78,7 +78,10 @@ class IngestService:
             tmp.write(file_bytes)
             tmp_path = tmp.name
 
-        config = aai.TranscriptionConfig(language_code="pt")
+        config = aai.TranscriptionConfig(
+            speech_model=aai.SpeechModel.best,
+            language_code="pt",
+        )
         transcriber = aai.Transcriber(config=config)
         transcript = transcriber.transcribe(tmp_path)
 
@@ -91,7 +94,10 @@ class IngestService:
 
     def _transcribe_url(self, url: str, filename: str) -> tuple[str, float]:
         """AssemblyAI busca o áudio diretamente da URL SAS e retorna transcrição + duração."""
-        config = aai.TranscriptionConfig(language_code="pt")
+        config = aai.TranscriptionConfig(
+            speech_model=aai.SpeechModel.best,
+            language_code="pt",
+        )
         transcriber = aai.Transcriber(config=config)
         transcript = transcriber.transcribe(url)
 
