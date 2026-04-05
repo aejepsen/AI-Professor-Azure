@@ -15,6 +15,13 @@ def _make_hit(text: str, source: str, score: float = 0.95) -> MagicMock:
     return hit
 
 
+def _query_points_result(hits: list) -> MagicMock:
+    """Simula o objeto retornado por client.query_points() com atributo .points."""
+    result = MagicMock()
+    result.points = hits
+    return result
+
+
 @pytest.fixture()
 def mock_qdrant():
     with patch("backend.services.knowledge_service.QdrantClient") as MockClient:
@@ -50,7 +57,7 @@ def service(mock_qdrant):
 def test_search_returns_results(service, mock_qdrant):
     """Busca com query válida deve retornar lista de resultados via RRF."""
     hit = _make_hit("Férias são 30 dias corridos.", "manual_ferias.pdf", score=0.95)
-    mock_qdrant.search.return_value = [hit]
+    mock_qdrant.query_points.return_value = _query_points_result([hit])
 
     results = service.search("Quantos dias de férias tenho?")
 
@@ -69,7 +76,7 @@ def test_search_empty_query_returns_empty(service, mock_qdrant):
 
 def test_search_qdrant_error_raises(service, mock_qdrant):
     """Erro do Qdrant deve ser propagado como exceção."""
-    mock_qdrant.search.side_effect = Exception("Qdrant connection timeout")
+    mock_qdrant.query_points.side_effect = Exception("Qdrant connection timeout")
 
     with pytest.raises(Exception, match="Qdrant connection timeout"):
         service.search("Como abrir um chamado?")
@@ -124,13 +131,14 @@ def test_search_with_coverage_adds_missing_source(service, mock_qdrant):
 def test_search_rrf_merges_dense_and_sparse(service, mock_qdrant):
     """Hit que aparece em dense e sparse deve ter score RRF maior que hit exclusivo."""
     shared_hit = _make_hit("texto compartilhado", "fonte.pdf")
+    shared_hit.id = "shared-id"
     exclusive_hit = _make_hit("texto exclusivo", "outro.pdf")
+    exclusive_hit.id = "exclusive-id"
 
-    # Primeira chamada (dense): shared + exclusive
-    # Segunda chamada (sparse): só shared
-    mock_qdrant.search.side_effect = [
-        [shared_hit, exclusive_hit],
-        [shared_hit],
+    # Primeira chamada (dense): shared + exclusive; segunda (sparse): só shared
+    mock_qdrant.query_points.side_effect = [
+        _query_points_result([shared_hit, exclusive_hit]),
+        _query_points_result([shared_hit]),
     ]
 
     results = service.search("query teste", top_k=2)
