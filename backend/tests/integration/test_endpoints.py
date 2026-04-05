@@ -33,7 +33,7 @@ _PUBLIC_KEY_PEM = _RSA_KEY.public_key().public_bytes(
 ).decode()
 
 
-def _make_valid_token(audience: str = f"api://{CLIENT_ID}") -> str:
+def _make_valid_token(audience: str = CLIENT_ID) -> str:
     now = datetime.now(tz=timezone.utc)
     payload = {
         "aud": audience,
