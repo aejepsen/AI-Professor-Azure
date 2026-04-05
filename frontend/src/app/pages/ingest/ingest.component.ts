@@ -1,4 +1,4 @@
-import { Component, NgZone, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -15,7 +15,6 @@ const ALLOWED = ['.mkv', '.mp4', '.mp3', '.wav', '.m4a', '.webm'];
 export class IngestComponent {
   private api = inject(ApiService);
   private auth = inject(AuthService);
-  private zone = inject(NgZone);
 
   loading = false;
   success = false;
@@ -43,12 +42,8 @@ export class IngestComponent {
       const result = await this.api.ingestViaBlob(
         file,
         token!,
-        (percent) => {
-          this.zone.run(() => { this.uploadPercent = percent; });
-        },
-        (phase) => {
-          this.zone.run(() => { this.phase = phase; });
-        },
+        (percent) => { this.uploadPercent = percent; },
+        (phase) => { this.phase = phase; },
       );
       this.nChunks = result.n_chunks;
       this.filename = result.filename;
@@ -56,7 +51,8 @@ export class IngestComponent {
     } catch (err: any) {
       this.error = err.message ?? 'Erro ao processar arquivo.';
     } finally {
-      this.zone.run(() => { this.loading = false; this.phase = ''; });
+      this.loading = false;
+      this.phase = '';
     }
   }
 

@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core';
-import { BlockBlobClient } from '@azure/storage-blob';
 
 const BACKEND_URL = 'https://ai-professor-backend.bluedesert-c198f5d7.eastus.azurecontainerapps.io';
 
@@ -79,17 +78,27 @@ export class ApiService {
     if (!sasRes.ok) throw new Error(sasJson.detail ?? `Erro ${sasRes.status}`);
     const { upload_url, blob_name } = sasJson as { upload_url: string; blob_name: string };
 
-    // 2. Upload direto para o Azure Blob Storage com progresso
+    // 2. Upload direto para o Azure Blob Storage com progresso via XHR
     onPhase('upload');
-    const blobClient = new BlockBlobClient(upload_url);
-    await blobClient.uploadData(file, {
-      blockSize: 8 * 1024 * 1024,  // 8 MB por bloco
-      concurrency: 2,               // 2 blocos em paralelo
-      onProgress: (ev) => {
-        const percent = Math.round((ev.loadedBytes / file.size) * 100);
-        onProgress(Math.min(percent, 100));
-      },
-      blobHTTPHeaders: { blobContentType: file.type || 'application/octet-stream' },
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', upload_url);
+      xhr.setRequestHeader('x-ms-blob-type', 'BlockBlob');
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+
+      xhr.upload.onprogress = (ev) => {
+        if (ev.lengthComputable) {
+          const percent = Math.round((ev.loaded / ev.total) * 100);
+          onProgress(Math.min(percent, 100));
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error(`Upload falhou: ${xhr.status} ${xhr.statusText}`));
+      };
+      xhr.onerror = () => reject(new Error('Erro de rede durante o upload.'));
+      xhr.send(file);
     });
 
     // 3. Solicitar processamento em background — retorna job_id imediatamente
