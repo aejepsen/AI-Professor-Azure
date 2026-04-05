@@ -33,11 +33,11 @@ _PUBLIC_KEY_PEM = _RSA_KEY.public_key().public_bytes(
 ).decode()
 
 
-def _make_valid_token(audience: str = f"api://{CLIENT_ID}/access_as_user") -> str:
+def _make_valid_token(audience: str = f"api://{CLIENT_ID}") -> str:
     now = datetime.now(tz=timezone.utc)
     payload = {
         "aud": audience,
-        "iss": f"https://sts.windows.net/{TENANT_ID}/",
+        "iss": f"https://login.microsoftonline.com/{TENANT_ID}/v2.0",
         "sub": "user-integration-test",
         "exp": now + timedelta(hours=1),
         "iat": now,
