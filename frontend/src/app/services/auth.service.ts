@@ -3,7 +3,7 @@ import { IPublicClientApplication, SilentRequest } from '@azure/msal-browser';
 
 export const MSAL_INSTANCE = 'MSAL_INSTANCE';
 
-const TOKEN_SCOPES = ['api://ai-professor/Chat.Read'];
+const TOKEN_SCOPES = ['api://087f139e-7252-49cf-ab70-abb64eac8667/access_as_user'];
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {

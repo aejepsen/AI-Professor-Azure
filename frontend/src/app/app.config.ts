@@ -7,8 +7,8 @@ import { MSAL_INSTANCE } from './services/auth.service';
 
 const msalInstance = new PublicClientApplication({
   auth: {
-    clientId: '00000000-0000-0000-0000-000000000000', // substituir pelo App Registration ID
-    authority: 'https://login.microsoftonline.com/common',
+    clientId: 'b0e2678a-fc0a-4fe5-81bb-f2cb1221e4d0',
+    authority: 'https://login.microsoftonline.com/d0900507-73c9-42c3-a8bf-a8eabdd611d8',
     redirectUri: window.location.origin,
   },
   cache: { cacheLocation: 'sessionStorage' },
