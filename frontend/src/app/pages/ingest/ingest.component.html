@@ -16,7 +16,11 @@
         <p class="ingest__percent">{{ uploadPercent }}%</p>
       } @else if (phase === 'processing') {
         <p class="ingest__phase">Transcrevendo e indexando...</p>
-        <p class="ingest__hint">Isso pode levar alguns minutos dependendo da duração do áudio.</p>
+        <div class="ingest__progress-track">
+          <div class="ingest__progress-bar" [style.width.%]="processingPercent"></div>
+        </div>
+        <p class="ingest__percent">{{ processingPercent | number:'1.0-0' }}%</p>
+        <p class="ingest__hint">Pode levar alguns minutos dependendo da duração do áudio.</p>
       } @else {
         <p>Processando...</p>
       }

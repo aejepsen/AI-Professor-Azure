@@ -23,7 +23,10 @@ export class IngestComponent {
   nChunks = 0;
   filename = '';
   uploadPercent = 0;
+  processingPercent = 0;
   phase: 'upload' | 'processing' | '' = '';
+
+  private _processingTimer: ReturnType<typeof setInterval> | null = null;
 
   async onFileSelected(file: File) {
     this.error = '';
@@ -44,7 +47,11 @@ export class IngestComponent {
         file,
         token!,
         (percent) => { this.uploadPercent = percent; this.cdr.detectChanges(); },
-        (phase) => { this.phase = phase; this.cdr.detectChanges(); },
+        (phase) => {
+          this.phase = phase;
+          if (phase === 'processing') this._startProcessingAnimation();
+          this.cdr.detectChanges();
+        },
       );
       this.nChunks = result.n_chunks;
       this.filename = result.filename;
@@ -52,6 +59,7 @@ export class IngestComponent {
     } catch (err: any) {
       this.error = err.message ?? 'Erro ao processar arquivo.';
     } finally {
+      this._stopProcessingAnimation();
       this.loading = false;
       this.phase = '';
     }
@@ -64,4 +72,22 @@ export class IngestComponent {
   }
 
   onDragOver(event: DragEvent) { event.preventDefault(); }
+
+  private _startProcessingAnimation() {
+    this.processingPercent = 0;
+    this._processingTimer = setInterval(() => {
+      // Avança rápido no início, desacelera perto de 90%
+      const remaining = 90 - this.processingPercent;
+      this.processingPercent += remaining * 0.03;
+      this.cdr.detectChanges();
+    }, 1500);
+  }
+
+  private _stopProcessingAnimation() {
+    if (this._processingTimer) {
+      clearInterval(this._processingTimer);
+      this._processingTimer = null;
+    }
+    this.processingPercent = 100;
+  }
 }
