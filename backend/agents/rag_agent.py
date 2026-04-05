@@ -13,6 +13,7 @@ logger = structlog.get_logger()
 class AgentState(TypedDict):
     query: str
     context: list[dict[str, Any]]
+    sources: list[str]
     response_chunks: list[str]
     error: str | None
 
@@ -26,12 +27,13 @@ def build_rag_graph(
     def retrieve(state: AgentState) -> AgentState:
         logger.info("rag_retrieve", query=state["query"][:50])
         context = knowledge_service.search(state["query"])
-        return {**state, "context": context}
+        sources = knowledge_service.list_sources()
+        return {**state, "context": context, "sources": sources}
 
     def generate(state: AgentState) -> AgentState:
         logger.info("rag_generate", context_chunks=len(state["context"]))
         chunks = list(
-            chat_service.generate_stream(state["query"], state["context"])
+            chat_service.generate_stream(state["query"], state["context"], state.get("sources"))
         )
         return {**state, "response_chunks": chunks}
 

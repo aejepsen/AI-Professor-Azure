@@ -27,6 +27,26 @@ class KnowledgeService:
         self._dense = SentenceTransformer(DENSE_MODEL)
         self._sparse = Bm25(SPARSE_MODEL)
 
+    def list_sources(self) -> list[str]:
+        """Retorna lista de fontes únicas indexadas no Qdrant."""
+        try:
+            result, _ = self._client.scroll(
+                collection_name=COLLECTION_NAME,
+                limit=1000,
+                with_payload=["source"],
+                with_vectors=False,
+            )
+            seen: set[str] = set()
+            sources = []
+            for point in result:
+                src = (point.payload or {}).get("source", "")
+                if src and src not in seen:
+                    seen.add(src)
+                    sources.append(src)
+            return sorted(sources)
+        except Exception:
+            return []
+
     def search(self, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict[str, Any]]:
         """
         Busca híbrida (dense + BM25 com fusão RRF): retorna os chunks mais relevantes.

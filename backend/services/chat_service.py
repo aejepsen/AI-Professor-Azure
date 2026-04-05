@@ -23,7 +23,7 @@ class ChatService:
         self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     def generate_stream(
-        self, query: str, context: list[dict[str, Any]]
+        self, query: str, context: list[dict[str, Any]], sources: list[str] | None = None
     ) -> Iterator[str]:
         """
         Gera resposta em streaming usando Claude Sonnet.
@@ -38,12 +38,17 @@ class ChatService:
         context_text = _format_context(context)
         user_message = f"{context_text}\n\nPergunta: {query}" if context_text else query
 
+        system = SYSTEM_PROMPT
+        if sources:
+            sources_text = "\n".join(f"- {s}" for s in sources)
+            system += f"\n\nDocumentos indexados disponíveis:\n{sources_text}"
+
         logger.info("chat_stream_start", query_len=len(query), context_chunks=len(context))
 
         with self._client.messages.stream(
             model=MODEL,
             max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
+            system=system,
             messages=[{"role": "user", "content": user_message}],
         ) as stream:
             for event in stream:

@@ -36,6 +36,7 @@ async def chat_stream(
     initial_state: AgentState = {
         "query": request.query,
         "context": [],
+        "sources": [],
         "response_chunks": [],
         "error": None,
     }
