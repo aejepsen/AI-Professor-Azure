@@ -67,8 +67,7 @@
     font-size: 0.95rem;
     line-height: 1.6;
     word-break: break-word;
-    user-select: text;
-    * { user-select: text; }
+    outline: none;
 
     p { margin-bottom: 0.5rem; }
     h1, h2, h3 { margin: 0.75rem 0 0.25rem; font-size: 1rem; }
