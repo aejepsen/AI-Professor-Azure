@@ -13,6 +13,19 @@ export interface IngestResult {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
 
+  async warmup(onRetry?: (attempt: number) => void): Promise<void> {
+    const MAX = 24; // 2 minutos (24 x 5s)
+    for (let i = 0; i < MAX; i++) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/health`, { signal: AbortSignal.timeout(5000) });
+        if (res.ok) return;
+      } catch { /* container ainda subindo */ }
+      onRetry?.(i + 1);
+      await new Promise(r => setTimeout(r, 5000));
+    }
+    throw new Error('Servidor não respondeu após 2 minutos.');
+  }
+
   async *chat(query: string, token: string): AsyncGenerator<string> {
     const res = await fetch(`${BACKEND_URL}/chat/stream`, {
       method: 'POST',

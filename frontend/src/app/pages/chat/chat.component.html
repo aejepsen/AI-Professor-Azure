@@ -8,6 +8,18 @@
     }
   </div>
 
+  @if (serverStatus === 'starting') {
+    <div class="chat__warmup">
+      <span class="chat__warmup-dot"></span>
+      Iniciando servidor{{ warmupAttempt > 0 ? ' (' + warmupAttempt * 5 + 's)' : '...' }}
+    </div>
+  }
+  @if (serverStatus === 'error') {
+    <div class="chat__warmup chat__warmup--error">
+      Servidor indisponível. Recarregue a página.
+    </div>
+  }
+
   @if (auth.isLoggedIn()) {
     <form class="chat__form" (submit)="$event.preventDefault(); send()">
       <textarea
@@ -18,7 +30,7 @@
         rows="2"
         (keydown.enter)="$event.preventDefault(); send()"
       ></textarea>
-      <button class="chat__send" type="submit" [disabled]="!query.trim()">Enviar</button>
+      <button class="chat__send" type="submit" [disabled]="!query.trim() || serverStatus !== 'ready'">Enviar</button>
     </form>
   } @else {
     <div class="chat__login-prompt">

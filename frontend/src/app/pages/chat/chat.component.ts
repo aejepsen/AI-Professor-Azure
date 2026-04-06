@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { marked } from 'marked';
@@ -12,13 +12,28 @@ import { AuthService } from '../../services/auth.service';
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss',
 })
-export class ChatComponent {
+export class ChatComponent implements OnInit {
   private api = inject(ApiService);
   private cdr = inject(ChangeDetectorRef);
   protected auth = inject(AuthService);
 
   messages: { role: 'user' | 'assistant'; text: string }[] = [];
   query = '';
+  serverStatus: 'starting' | 'ready' | 'error' = 'starting';
+  warmupAttempt = 0;
+
+  ngOnInit(): void {
+    this.api.warmup(attempt => {
+      this.warmupAttempt = attempt;
+      this.cdr.detectChanges();
+    }).then(() => {
+      this.serverStatus = 'ready';
+      this.cdr.detectChanges();
+    }).catch(() => {
+      this.serverStatus = 'error';
+      this.cdr.detectChanges();
+    });
+  }
 
   md(text: string): string {
     return marked.parse(text) as string;
