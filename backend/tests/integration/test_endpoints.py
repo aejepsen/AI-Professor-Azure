@@ -332,23 +332,28 @@ def test_process_blob_cria_job_e_retorna_job_id(client):
     assert body["status"] == "processing"
 
 
-def test_process_blob_blob_name_invalido_retorna_422(client):
-    """POST /ingest/process com blob_name contendo caracteres inválidos deve retornar 422."""
+def test_process_blob_blob_name_com_espacos_e_especiais_aceito(client):
+    """POST /ingest/process com blob_name contendo espaços/acentos deve ser aceito (200)."""
     token = _make_valid_token()
     with (
         patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
         patch("backend.api.auth.settings") as mock_auth_settings,
+        patch("backend.api.routes.ingest._blob_service") as mock_blob,
+        patch("backend.api.routes.ingest._ingest_service") as mock_ingest,
     ):
         mock_jwks.return_value = _PUBLIC_KEY_PEM
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
+        mock_blob.get_read_url.return_value = "https://fake.blob.core.windows.net/uploads/fake"
+        mock_ingest.ingest_from_url.return_value = {"filename": "video.mp4", "n_chunks": 3, "status": "ok"}
         response = client.post(
             "/ingest/process",
-            json={"blob_name": "uuid/video file@invalid.mp4", "original_filename": "video.mp4"},
+            json={"blob_name": "uuid/Análise Estatística Espacial I.mkv", "original_filename": "Análise Estatística Espacial I.mkv"},
             headers={"Authorization": f"Bearer {token}"},
         )
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert "job_id" in response.json()
 
 
 def test_get_job_status_nao_encontrado_retorna_404(client):
