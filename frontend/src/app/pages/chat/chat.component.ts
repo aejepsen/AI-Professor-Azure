@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { marked } from 'marked';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
+import { ChatStateService } from '../../services/chat-state.service';
 
 @Component({
   selector: 'app-chat',
@@ -16,8 +17,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private cdr = inject(ChangeDetectorRef);
   protected auth = inject(AuthService);
+  private state = inject(ChatStateService);
 
-  messages: { role: 'user' | 'assistant'; text: string }[] = [];
+  get messages() { return this.state.messages; }
   query = '';
   serverStatus: 'starting' | 'ready' | 'error' = 'starting';
   warmupAttempt = 0;
@@ -57,14 +59,14 @@ export class ChatComponent implements OnInit, OnDestroy {
   async send() {
     if (!this.query.trim()) return;
 
-    this.messages.push({ role: 'user', text: this.query });
+    this.state.messages.push({ role: 'user', text: this.query });
     const q = this.query;
     this.query = '';
 
     const token = await this.auth.getToken();
     console.log('[Chat] token:', token ? token.substring(0, 30) + '...' : null);
     const assistantMsg = { role: 'assistant' as const, text: '' };
-    this.messages.push(assistantMsg);
+    this.state.messages.push(assistantMsg);
 
     try {
       for await (const chunk of this.api.chat(q, token!)) {
