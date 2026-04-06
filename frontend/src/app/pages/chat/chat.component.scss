@@ -33,12 +33,33 @@
     &--assistant { align-self: flex-start; }
   }
 
+  &__bubble-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
   &__role {
     font-size: 0.72rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--muted);
+  }
+
+  &__copy {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1rem;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+    cursor: pointer;
+
+    &:hover { color: var(--teal); background: var(--teal-dim); }
   }
 
   &__text {

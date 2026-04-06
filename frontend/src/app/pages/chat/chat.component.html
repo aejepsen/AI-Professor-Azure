@@ -2,7 +2,14 @@
   <div class="chat__messages" #messagesContainer>
     @for (msg of messages; track $index) {
       <div class="chat__bubble" [class.chat__bubble--user]="msg.role === 'user'" [class.chat__bubble--assistant]="msg.role === 'assistant'">
-        <span class="chat__role">{{ msg.role === 'user' ? 'Você' : 'Professor' }}</span>
+        <div class="chat__bubble-header">
+          <span class="chat__role">{{ msg.role === 'user' ? 'Você' : 'Professor' }}</span>
+          @if (msg.role === 'assistant' && msg.text) {
+            <button class="chat__copy" (click)="copy(msg.text, $index)" title="Copiar resposta">
+              {{ copiedIndex === $index ? '✓' : '⎘' }}
+            </button>
+          }
+        </div>
         <div class="chat__text" [innerHTML]="md(msg.text)"></div>
       </div>
     }

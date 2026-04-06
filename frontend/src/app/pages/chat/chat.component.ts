@@ -21,6 +21,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   query = '';
   serverStatus: 'starting' | 'ready' | 'error' = 'starting';
   warmupAttempt = 0;
+  copiedIndex: number | null = null;
   private stopKeepalive?: () => void;
 
   ngOnInit(): void {
@@ -43,6 +44,14 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   md(text: string): string {
     return marked.parse(text) as string;
+  }
+
+  copy(text: string, index: number): void {
+    navigator.clipboard.writeText(text).then(() => {
+      this.copiedIndex = index;
+      this.cdr.detectChanges();
+      setTimeout(() => { this.copiedIndex = null; this.cdr.detectChanges(); }, 2000);
+    });
   }
 
   async send() {
