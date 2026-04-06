@@ -1,7 +1,6 @@
 import { ChangeDetectorRef, Component, inject, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { marked } from 'marked';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { ChatStateService } from '../../services/chat-state.service';
@@ -44,10 +43,6 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.stopKeepalive?.();
   }
 
-  md(text: string): string {
-    return marked.parse(text) as string;
-  }
-
   copy(text: string, index: number): void {
     navigator.clipboard.writeText(text).then(() => {
       this.copiedIndex = index;
@@ -59,25 +54,22 @@ export class ChatComponent implements OnInit, OnDestroy {
   async send() {
     if (!this.query.trim()) return;
 
-    this.state.messages.push({ role: 'user', text: this.query });
+    this.state.addMessage('user', this.query);
     const q = this.query;
     this.query = '';
 
     const token = await this.auth.getToken();
-    console.log('[Chat] token:', token ? token.substring(0, 30) + '...' : null);
-    const assistantMsg = { role: 'assistant' as const, text: '' };
-    this.state.messages.push(assistantMsg);
+    const assistantMsg = this.state.addMessage('assistant', '');
 
     try {
       for await (const chunk of this.api.chat(q, token!)) {
-        console.log('[Chat] chunk:', chunk);
         assistantMsg.text += chunk;
+        this.state.updateHtml(assistantMsg);
         this.cdr.detectChanges();
       }
-      console.log('[Chat] stream done');
     } catch (err) {
-      console.error('[Chat] error:', err);
       assistantMsg.text = 'Erro ao obter resposta.';
+      this.state.updateHtml(assistantMsg);
     }
   }
 }
