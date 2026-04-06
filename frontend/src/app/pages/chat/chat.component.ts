@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, NgZone, inject, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, NgZone, ViewChild, inject, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
@@ -13,7 +13,7 @@ import { ChatStateService } from '../../services/chat-state.service';
   styleUrl: './chat.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ChatComponent implements OnInit, OnDestroy {
+export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private api = inject(ApiService);
   private cdr = inject(ChangeDetectorRef);
   private zone = inject(NgZone);
@@ -26,6 +26,19 @@ export class ChatComponent implements OnInit, OnDestroy {
   warmupAttempt = 0;
   copiedIndex: number | null = null;
   private stopKeepalive?: () => void;
+  @ViewChild('messagesContainer') private messagesContainer!: ElementRef<HTMLElement>;
+
+  ngAfterViewInit(): void {
+    // Desativa overflow durante drag para permitir seleção de texto no Chrome/Linux
+    const el = this.messagesContainer.nativeElement;
+    this.zone.runOutsideAngular(() => {
+      el.addEventListener('mousedown', () => {
+        el.style.overflowY = 'hidden';
+        const restore = () => { el.style.overflowY = 'auto'; document.removeEventListener('mouseup', restore); };
+        document.addEventListener('mouseup', restore);
+      });
+    });
+  }
 
   ngOnInit(): void {
     // Warmup e keepalive fora do Zone.js para não disparar change detection
