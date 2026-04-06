@@ -95,6 +95,31 @@
     font-size: 0.95rem;
   }
 
+  &__warmup {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: var(--muted);
+
+    &--error { color: #e05c5c; }
+  }
+
+  &__warmup-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--teal);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+
   &__send {
     padding: 0.75rem 1.25rem;
     border-radius: 10px;
