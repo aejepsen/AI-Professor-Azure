@@ -1,36 +1,37 @@
 <div class="ingest">
   <div
     class="ingest__drop"
-    [class.ingest__drop--loading]="loading"
+    [class.ingest__drop--loading]="state.loading"
     (drop)="onDrop($event)"
     (dragover)="onDragOver($event)"
   >
-    @if (loading) {
+    @if (state.loading) {
       <div class="ingest__spinner"></div>
 
-      @if (phase === 'upload') {
+      @if (state.phase === 'upload') {
         <p class="ingest__phase">Enviando para o servidor...</p>
         <div class="ingest__progress-track">
-          <div class="ingest__progress-bar" [style.width.%]="uploadPercent"></div>
+          <div class="ingest__progress-bar" [style.width.%]="state.uploadPercent"></div>
         </div>
-        <p class="ingest__percent">{{ uploadPercent }}%</p>
-      } @else if (phase === 'processing') {
+        <p class="ingest__percent">{{ state.uploadPercent }}%</p>
+      } @else if (state.phase === 'processing') {
         <p class="ingest__phase">Transcrevendo e indexando...</p>
         <div class="ingest__progress-track">
-          <div class="ingest__progress-bar" [style.width.%]="processingPercent"></div>
+          <div class="ingest__progress-bar" [style.width.%]="state.processingPercent"></div>
         </div>
-        <p class="ingest__percent">{{ processingPercent | number:'1.0-0' }}%</p>
-        @if (estimatedMinutes > 0) {
-          <p class="ingest__hint">Estimativa: ~{{ estimatedMinutes }} min</p>
+        <p class="ingest__percent">{{ state.processingPercent | number:'1.0-0' }}%</p>
+        @if (state.estimatedMinutes > 0) {
+          <p class="ingest__hint">Estimativa: ~{{ state.estimatedMinutes }} min</p>
         } @else {
           <p class="ingest__hint">Pode levar alguns minutos dependendo da duração do áudio.</p>
         }
       } @else {
         <p>Processando...</p>
       }
-    } @else if (success) {
+    } @else if (state.success) {
       <div class="ingest__success">
-        <p>✓ <strong>{{ filename }}</strong> indexado com <strong>{{ nChunks }}</strong> chunks.</p>
+        <p>✓ <strong>{{ state.filename }}</strong> indexado com <strong>{{ state.nChunks }}</strong> chunks.</p>
+        <button class="ingest__new" (click)="state.reset()">Enviar outro arquivo</button>
       </div>
     } @else {
       <label class="ingest__label">
@@ -42,7 +43,7 @@
     }
   </div>
 
-  @if (error) {
-    <p class="ingest__error">{{ error }}</p>
+  @if (state.error) {
+    <p class="ingest__error">{{ state.error }}</p>
   }
 </div>
