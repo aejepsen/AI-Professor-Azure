@@ -104,7 +104,7 @@ async def get_sas_token(
 # ---------------------------------------------------------------------------
 
 class ProcessRequest(BaseModel):
-    blob_name: str = Field(..., max_length=256, pattern=r"^[a-zA-Z0-9._\-/]+$")
+    blob_name: str = Field(..., max_length=512)
     original_filename: str = Field(..., max_length=256)
 
 
