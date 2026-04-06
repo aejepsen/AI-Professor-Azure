@@ -7,11 +7,12 @@
 
   &__messages {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: hidden;
     display: flex;
     flex-direction: column;
     gap: 1rem;
     padding-bottom: 1rem;
+    touch-action: pan-y;
   }
 
   &__bubble {

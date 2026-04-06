@@ -29,14 +29,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef<HTMLElement>;
 
   ngAfterViewInit(): void {
-    // Desativa overflow durante drag para permitir seleção de texto no Chrome/Linux
     const el = this.messagesContainer.nativeElement;
+    // overflow-y: hidden no CSS — drag = seleção, wheel = scroll manual
     this.zone.runOutsideAngular(() => {
-      el.addEventListener('mousedown', () => {
-        el.style.overflowY = 'hidden';
-        const restore = () => { el.style.overflowY = 'auto'; document.removeEventListener('mouseup', restore); };
-        document.addEventListener('mouseup', restore);
-      });
+      el.addEventListener('wheel', (e: WheelEvent) => {
+        e.preventDefault();
+        el.scrollTop += e.deltaY;
+      }, { passive: false });
     });
   }
 
