@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, inject, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { marked } from 'marked';
@@ -12,7 +12,7 @@ import { AuthService } from '../../services/auth.service';
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss',
 })
-export class ChatComponent implements OnInit {
+export class ChatComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private cdr = inject(ChangeDetectorRef);
   protected auth = inject(AuthService);
@@ -21,6 +21,7 @@ export class ChatComponent implements OnInit {
   query = '';
   serverStatus: 'starting' | 'ready' | 'error' = 'starting';
   warmupAttempt = 0;
+  private stopKeepalive?: () => void;
 
   ngOnInit(): void {
     this.api.warmup(attempt => {
@@ -28,11 +29,16 @@ export class ChatComponent implements OnInit {
       this.cdr.detectChanges();
     }).then(() => {
       this.serverStatus = 'ready';
+      this.stopKeepalive = this.api.startKeepalive();
       this.cdr.detectChanges();
     }).catch(() => {
       this.serverStatus = 'error';
       this.cdr.detectChanges();
     });
+  }
+
+  ngOnDestroy(): void {
+    this.stopKeepalive?.();
   }
 
   md(text: string): string {
