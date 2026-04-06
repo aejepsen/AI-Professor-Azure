@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "version": "0.0.0",
-  "_deploy": "trigger",
+  "_deploy": "trigger-2",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",

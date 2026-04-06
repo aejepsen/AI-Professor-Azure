@@ -1,4 +1,5 @@
 """Entry point da aplicação FastAPI."""
+# redeploy
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
