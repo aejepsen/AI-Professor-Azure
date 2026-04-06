@@ -10,7 +10,7 @@
             </button>
           }
         </div>
-        <div class="chat__text" [innerHTML]="msg.html"></div>
+        <div class="chat__text" [innerHTML]="msg.html" contenteditable="true" spellcheck="false" (beforeinput)="$event.preventDefault()"></div>
       </div>
     }
   </div>
