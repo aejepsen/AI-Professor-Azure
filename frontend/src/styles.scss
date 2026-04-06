@@ -24,8 +24,8 @@ body {
   min-height: 100vh;
 }
 
-::selection { background: var(--teal); color: #08090d; }
-::-moz-selection { background: var(--teal); color: #08090d; }
+::selection { background: #00E5C8; color: #08090d; }
+::-moz-selection { background: #00E5C8; color: #08090d; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
