@@ -30,12 +30,49 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     const el = this.messagesContainer.nativeElement;
-    // overflow-y: hidden no CSS — drag = seleção, wheel = scroll manual
     this.zone.runOutsideAngular(() => {
+      // Scroll via roda do mouse (overflow-y: hidden no CSS)
       el.addEventListener('wheel', (e: WheelEvent) => {
         e.preventDefault();
         el.scrollTop += e.deltaY;
       }, { passive: false });
+
+      // Seleção de texto manual — contorna o Chrome/Linux que trata drag como scroll
+      el.addEventListener('mousedown', (e: MouseEvent) => {
+        if (e.button !== 0) return;
+
+        const caretAt = (x: number, y: number): { node: Node; offset: number } | null => {
+          if ('caretPositionFromPoint' in document) {
+            const p = (document as any).caretPositionFromPoint(x, y);
+            return p ? { node: p.offsetNode, offset: p.offset } : null;
+          }
+          const r = (document as any).caretRangeFromPoint?.(x, y) as Range | null;
+          return r ? { node: r.startContainer, offset: r.startOffset } : null;
+        };
+
+        const anchor = caretAt(e.clientX, e.clientY);
+        if (!anchor) return;
+        e.preventDefault();
+
+        const sel = window.getSelection()!;
+        sel.removeAllRanges();
+        const range = document.createRange();
+        range.setStart(anchor.node, anchor.offset);
+        range.collapse(true);
+        sel.addRange(range);
+
+        const onMove = (me: MouseEvent) => {
+          if (me.buttons !== 1) return;
+          const focus = caretAt(me.clientX, me.clientY);
+          if (focus) sel.extend(focus.node, focus.offset);
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
     });
   }
 

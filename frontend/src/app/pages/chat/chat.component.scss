@@ -7,7 +7,7 @@
 
   &__messages {
     flex: 1;
-    overflow-y: hidden;
+    overflow-y: scroll;
     display: flex;
     flex-direction: column;
     gap: 1rem;
