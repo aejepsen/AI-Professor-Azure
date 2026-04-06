@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, inject, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, NgZone, inject, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
@@ -11,10 +11,12 @@ import { ChatStateService } from '../../services/chat-state.service';
   imports: [CommonModule, FormsModule],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
   private cdr = inject(ChangeDetectorRef);
+  private zone = inject(NgZone);
   protected auth = inject(AuthService);
   private state = inject(ChatStateService);
 
@@ -26,16 +28,25 @@ export class ChatComponent implements OnInit, OnDestroy {
   private stopKeepalive?: () => void;
 
   ngOnInit(): void {
-    this.api.warmup(attempt => {
-      this.warmupAttempt = attempt;
-      this.cdr.detectChanges();
-    }).then(() => {
-      this.serverStatus = 'ready';
-      this.stopKeepalive = this.api.startKeepalive();
-      this.cdr.detectChanges();
-    }).catch(() => {
-      this.serverStatus = 'error';
-      this.cdr.detectChanges();
+    // Warmup e keepalive fora do Zone.js para não disparar change detection
+    this.zone.runOutsideAngular(() => {
+      this.api.warmup(attempt => {
+        this.zone.run(() => {
+          this.warmupAttempt = attempt;
+          this.cdr.markForCheck();
+        });
+      }).then(() => {
+        this.zone.run(() => {
+          this.serverStatus = 'ready';
+          this.stopKeepalive = this.api.startKeepalive();
+          this.cdr.markForCheck();
+        });
+      }).catch(() => {
+        this.zone.run(() => {
+          this.serverStatus = 'error';
+          this.cdr.markForCheck();
+        });
+      });
     });
   }
 
@@ -46,8 +57,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   copy(text: string, index: number): void {
     navigator.clipboard.writeText(text).then(() => {
       this.copiedIndex = index;
-      this.cdr.detectChanges();
-      setTimeout(() => { this.copiedIndex = null; this.cdr.detectChanges(); }, 2000);
+      this.cdr.markForCheck();
+      setTimeout(() => { this.copiedIndex = null; this.cdr.markForCheck(); }, 2000);
     });
   }
 
@@ -57,6 +68,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.state.addMessage('user', this.query);
     const q = this.query;
     this.query = '';
+    this.cdr.markForCheck();
 
     const token = await this.auth.getToken();
     const assistantMsg = this.state.addMessage('assistant', '');
@@ -65,11 +77,12 @@ export class ChatComponent implements OnInit, OnDestroy {
       for await (const chunk of this.api.chat(q, token!)) {
         assistantMsg.text += chunk;
         this.state.updateHtml(assistantMsg);
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
       }
     } catch (err) {
       assistantMsg.text = 'Erro ao obter resposta.';
       this.state.updateHtml(assistantMsg);
+      this.cdr.markForCheck();
     }
   }
 }
