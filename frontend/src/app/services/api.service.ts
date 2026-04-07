@@ -26,6 +26,13 @@ export class ApiService {
     throw new Error('Servidor não respondeu após 2 minutos.');
   }
 
+  startKeepalive(): () => void {
+    const id = setInterval(() => {
+      fetch(`${BACKEND_URL}/health`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
+    }, 90_000); // a cada 90s — evita scale-to-zero
+    return () => clearInterval(id);
+  }
+
   async *chat(query: string, token: string): AsyncGenerator<string> {
     const res = await fetch(`${BACKEND_URL}/chat/stream`, {
       method: 'POST',
