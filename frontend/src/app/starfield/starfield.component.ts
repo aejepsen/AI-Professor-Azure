@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, NgZone, OnDestroy, AfterViewInit, ViewChild, inject } from '@angular/core';
 
 interface Star {
   x: number;
@@ -21,6 +21,7 @@ const SPEED = 0.3;
 })
 export class StarfieldComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  private zone = inject(NgZone);
 
   stars: Star[] = [];
   private animId = 0;
@@ -30,9 +31,11 @@ export class StarfieldComponent implements AfterViewInit, OnDestroy {
     const canvas = this.canvasRef.nativeElement;
     this.ctx = canvas.getContext('2d')!;
     this.resize(canvas);
-    window.addEventListener('resize', () => this.resize(canvas));
-    this.initStars(canvas.width, canvas.height);
-    this.loop();
+    this.zone.runOutsideAngular(() => {
+      window.addEventListener('resize', () => this.resize(canvas));
+      this.initStars(canvas.width, canvas.height);
+      this.loop();
+    });
   }
 
   ngOnDestroy(): void {

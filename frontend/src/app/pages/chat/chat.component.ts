@@ -35,6 +35,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         e.preventDefault();
         el.scrollTop += e.deltaY;
       }, { passive: false });
+
     });
   }
 
@@ -49,9 +50,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       }).then(() => {
         this.zone.run(() => {
           this.serverStatus = 'ready';
-          this.stopKeepalive = this.api.startKeepalive();
           this.cdr.markForCheck();
         });
+        this.stopKeepalive = this.api.startKeepalive();
       }).catch(() => {
         this.zone.run(() => {
           this.serverStatus = 'error';
