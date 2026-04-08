@@ -1,6 +1,6 @@
 # AI Professor v1 — Execution Plan
 
-> Versão: 1.1 | Data: 2026-04-05 (atualizado após implementação)
+> Versão: 1.2 | Data: 2026-04-07 (atualizado após melhorias pós-produção)
 > Sequência de implementação com critérios de aceite por fase.
 > **Regra**: só avançar de fase quando todos os critérios de aceite da fase anterior forem cumpridos.
 
@@ -100,7 +100,7 @@ infra/terraform/
 **Recursos gerenciados**:
 - Resource Group: `ai-professor-prod-rg`
 - Container Apps Environment + Log Analytics
-- Container App (backend): 2 CPU / 4Gi, min_replicas=0, todos os secrets via Terraform
+- Container App (backend): 0.5 CPU / 2Gi (medido em prod: ~1.56 GB uso real), min_replicas=0, todos os secrets via Terraform
 - Static Web App: frontend Angular (Free tier)
 - Storage Account: uploads de vídeo com CORS configurado
 - App Registrations: frontend SPA + API backend
@@ -146,7 +146,7 @@ terraform apply tfplan
 - [x] `terraform apply` sem erros
 - [x] Todos os recursos declarados no Terraform (Container App, Static Web App, Blob Storage, App Registrations)
 - [x] Terraform state remoto configurado (`aiprofessortfstate` em `ai-professor-tfstate-rg`)
-- [x] Container App provisionado e Running (`ai-professor-backend`, 2 CPU / 4Gi, min_replicas=0)
+- [x] Container App provisionado e Running (`ai-professor-backend`, 0.5 CPU / 2Gi, min_replicas=0)
 - [x] Container App tem todas as env vars configuradas via secrets
 - [x] Static Web App provisionado: `https://jolly-cliff-0e7c4130f.1.azurestaticapps.net`
 - [x] App Registrations criados com escopo `access_as_user` visível no portal
@@ -690,3 +690,8 @@ curl {API_URL}/metrics
 | AssemblyAI "speech_models error" | SDK 0.30.0 não suporta `speech_models` plural | Upgrade para assemblyai==0.59.0 |
 | PCD_AULA_8 sumia da listagem | Busca semântica não recuperava chunks para meta-perguntas | `list_sources()` injetado no system prompt |
 | CORS duplicado no Blob Storage | Regras adicionadas manualmente antes do Terraform | CORS agora declarado em `blob_storage.tf` — único source of truth |
+| Drag selection não funcionava no chat | `requestAnimationFrame` do `StarfieldComponent` rodava dentro do Angular zone → `ApplicationRef.tick()` 60x/s interferia com tracking de drag do Chrome/Linux | Mover loop de animação para `NgZone.runOutsideAngular()` |
+| Seleção de texto bloqueada por CSS | `user-select: text !important` global sobrescrevia comportamento nativo do `contenteditable` | Remover `!important`, adicionar `user-select: text` apenas no `.chat__text` |
+| Keepalive causando custo inesperado | Ping a cada 90s mantinha container ativo 24/7 (2 CPU / 4Gi) → R$21 de custo | Remover keepalive; warmup exibe "Iniciando servidor..." no cold start |
+| Container spec superdimensionada | Spec inicial de 2 CPU / 4Gi sem base em dados reais | Medir via Azure Monitor antes de dimensionar: uso real ~1.56 GB → spec 0.5 CPU / 2Gi |
+| Build Angular quebrando com `$event.target.innerHTML` | TypeScript strict templates rejeita `EventTarget.innerHTML` (tipo genérico) | Usar `$any($event.target).innerHTML` para bypass pontual de tipo |
