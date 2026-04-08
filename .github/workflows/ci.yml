@@ -51,6 +51,9 @@ jobs:
           AZURE_CLIENT_ID: test-client
           RAGAS_TEST_TOKEN: test-ragas-token
           ASSEMBLYAI_API_KEY: fake-assemblyai-key
+          AZURE_STORAGE_ACCOUNT_NAME: fake-storage
+          AZURE_STORAGE_ACCOUNT_KEY: ZmFrZWtleWZha2VrZXlmYWtla2V5ZmFrZWtleWZha2VrZXlmYWtla2V5ZmFrZWtleWZha2VrZXlmYWtla2V5Zg==
+          AZURE_STORAGE_CONTAINER: uploads
         run: pytest tests/unit/ tests/integration/ -v --tb=short
 
   # ---------------------------------------------------------------------------

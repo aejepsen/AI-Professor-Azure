@@ -1,6 +1,6 @@
 # AI Professor v1 — Action Plan
 
-> Versão: 1.1 | Data: 2026-04-05 (atualizado após implementação)
+> Versão: 1.1 | Data: 2026-04-07 (atualizado após implementação)
 > Objetivo: eliminar todos os bloqueios técnicos e entregar um sistema RAG corporativo production-ready.
 
 ---
@@ -279,7 +279,7 @@ text = text.lower()
 | Qdrant | `prefer_grpc=True`, connection pool, batch upsert |
 | Claude API | Streaming SSE direto ao cliente, sem buffer intermediário |
 | FastAPI | Workers assíncronos (`asyncio`), evitar bloqueio de event loop |
-| Container App | **2 CPU / 4Gi** (necessário para multilingual-e5-large), `min_replicas=0` (scale-to-zero) |
+| Container App | **0.5 CPU / 2Gi** (medido em prod: ~1.56 GB uso real), `min_replicas=0` (scale-to-zero) |
 | Ingest assíncrono | `BackgroundTasks` do FastAPI — retorna `job_id` imediatamente, frontend faz polling |
 | Upload direto | Frontend faz PUT direto ao Azure Blob via XHR com SAS token — backend nunca recebe o arquivo |
 
