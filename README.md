@@ -131,12 +131,18 @@ npm start
 
 ## Deploy
 
-### Infraestrutura (primeira vez)
+### Infraestrutura (primeira vez ou após terraform destroy)
 
 ```bash
 cd infra/terraform
 terraform init
-terraform apply
+terraform apply -var-file="prod.tfvars"
+```
+
+Após o apply, atualizar o GitHub Secret `AZURE_STATIC_WEB_APPS_API_TOKEN` com o novo token:
+
+```bash
+terraform output -raw static_web_app_api_key
 ```
 
 ### Aplicação
