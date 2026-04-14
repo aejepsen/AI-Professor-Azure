@@ -1,7 +1,7 @@
 # AI Professor
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
-![Angular](https://img.shields.io/badge/Angular-17-DD0031?logo=angular&logoColor=white)
+![Angular](https://img.shields.io/badge/Angular-21-DD0031?logo=angular&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.2-4B8BBE)
 ![Claude](https://img.shields.io/badge/Claude-Sonnet%204.6-D97706)
@@ -54,12 +54,12 @@ Usuário (browser)
 | Claude Sonnet 4.6 | Geração de respostas |
 | Qdrant Cloud | Busca vetorial híbrida (dense + sparse) |
 | AssemblyAI SDK | Transcrição automática de vídeo |
-| python-jose | Validação de JWT (Azure Entra ID) |
+| PyJWT[crypto] | Validação de JWT RS256 (Azure Entra ID) |
 
 ### Frontend
 | Tecnologia | Uso |
 |---|---|
-| Angular 17 (standalone) | SPA com componentes standalone |
+| Angular 21 (standalone) | SPA com componentes standalone |
 | MSAL Angular | Autenticação Microsoft (redirect flow) |
 | Azure Static Web Apps | Hospedagem + roteamento |
 
@@ -107,15 +107,15 @@ Usuário (browser)
 ### Backend
 
 ```bash
-cd backend
+# Execute a partir da raiz do projeto (AI-Professor/)
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
 # Copie e preencha as variáveis de ambiente
 cp .env.example .env
 
-uvicorn app.main:app --reload --port 8000
+uvicorn backend.api.main:app --reload --port 8000
 ```
 
 ### Frontend
@@ -182,11 +182,14 @@ O GitHub Actions:
 ```
 AI-Professor/
 ├── backend/
-│   ├── app/
-│   │   ├── main.py          # FastAPI app + rotas
-│   │   ├── agent/           # LangGraph StateGraph
-│   │   ├── services/        # KnowledgeService, StorageService
-│   │   └── auth/            # Validação JWT
+│   ├── api/
+│   │   ├── main.py          # FastAPI app + middlewares
+│   │   ├── routes/          # chat, ingest, health
+│   │   ├── auth.py          # Validação JWT RS256 (Azure)
+│   │   └── schemas.py       # Pydantic schemas
+│   ├── agents/              # LangGraph StateGraph (RAG)
+│   ├── services/            # KnowledgeService, ChatService, BlobService
+│   ├── core/                # Config (pydantic-settings)
 │   ├── tests/
 │   │   ├── unit/
 │   │   ├── integration/
@@ -194,8 +197,9 @@ AI-Professor/
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/app/
-│   │   ├── components/      # Chat, Upload, etc.
-│   │   └── services/        # API, Auth
+│   │   ├── pages/           # chat, ingest
+│   │   ├── services/        # api, auth, chat-state, ingest-state
+│   │   └── nav/             # componente de navegação
 │   └── package.json
 ├── infra/
 │   └── terraform/           # 100% IaC

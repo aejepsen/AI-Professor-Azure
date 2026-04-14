@@ -7,7 +7,6 @@ from typing import Any
 
 import assemblyai as aai
 import structlog
-from fastembed.sparse.bm25 import Bm25
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import (
     Distance,
@@ -16,16 +15,17 @@ from qdrant_client.http.models import (
     SparseVectorParams,
     VectorParams,
 )
-from sentence_transformers import SentenceTransformer
 
 from backend.core.config import settings
+from backend.core.models import (
+    COLLECTION_NAME,
+    VECTOR_SIZE,
+    get_dense_model,
+    get_sparse_model,
+)
 
 logger = structlog.get_logger()
 
-COLLECTION_NAME = "ai_professor_docs"
-DENSE_MODEL = "intfloat/multilingual-e5-large"
-SPARSE_MODEL = "Qdrant/bm25"
-VECTOR_SIZE = 1024
 CHUNK_MAX_WORDS = 400
 CHUNK_OVERLAP_WORDS = 50
 
@@ -38,8 +38,8 @@ class IngestService:
             api_key=settings.qdrant_api_key,
             timeout=30.0,
         )
-        self._dense = SentenceTransformer(DENSE_MODEL)
-        self._sparse = Bm25(SPARSE_MODEL)
+        self._dense = get_dense_model()
+        self._sparse = get_sparse_model()
 
     def ingest(self, file_bytes: bytes, filename: str) -> dict[str, Any]:
         """
@@ -81,7 +81,10 @@ class IngestService:
             tmp_path = tmp.name
 
         try:
-            config = aai.TranscriptionConfig(language_code="pt")
+            config = aai.TranscriptionConfig(
+                speech_model=aai.SpeechModel.universal,
+                language_code="pt",
+            )
             transcriber = aai.Transcriber(config=config)
             transcript = transcriber.transcribe(tmp_path)
         finally:
@@ -97,7 +100,7 @@ class IngestService:
     def _transcribe_url(self, url: str, filename: str) -> tuple[str, float]:
         """AssemblyAI busca o áudio diretamente da URL SAS e retorna transcrição + duração."""
         config = aai.TranscriptionConfig(
-            speech_models=["universal-2"],
+            speech_model=aai.SpeechModel.universal,
             language_code="pt",
         )
         transcriber = aai.Transcriber(config=config)

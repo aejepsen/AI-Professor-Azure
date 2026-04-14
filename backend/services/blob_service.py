@@ -1,4 +1,6 @@
 """Serviço de Azure Blob Storage — gera SAS tokens e gerencia blobs."""
+import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -24,13 +26,23 @@ class BlobService:
             credential=self._account_key,
         )
 
+    @staticmethod
+    def _sanitize_filename(filename: str) -> str:
+        """Remove path traversal, null bytes e caracteres especiais do filename."""
+        name = os.path.basename(filename)  # strip path separators
+        name = name.replace("\x00", "")  # null bytes
+        name = re.sub(r"[^\w\s\-.]", "_", name)  # apenas alfanum, dash, dot, underscore
+        name = name.strip(". ")  # remove leading/trailing dots e espaços
+        return name[:255] if name else "upload"
+
     def generate_upload_sas(self, filename: str) -> tuple[str, str]:
         """Gera SAS URL de escrita e retorna (upload_url, blob_name).
 
         O blob_name inclui um UUID para evitar colisões.
         A SAS expira em 2 horas.
         """
-        blob_name = f"{uuid.uuid4()}/{filename}"
+        safe_filename = self._sanitize_filename(filename)
+        blob_name = f"{uuid.uuid4()}/{safe_filename}"
         expiry = datetime.now(tz=timezone.utc) + timedelta(hours=2)
 
         sas_token = generate_blob_sas(

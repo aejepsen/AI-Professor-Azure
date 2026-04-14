@@ -26,8 +26,8 @@ def build_rag_graph(
 
     def retrieve(state: AgentState) -> AgentState:
         logger.info("rag_retrieve", query=state["query"][:50])
-        context = knowledge_service.search_with_coverage(state["query"])
-        sources = knowledge_service.list_sources()
+        # search_with_coverage retorna (results, sources) — uma única chamada ao Qdrant
+        context, sources = knowledge_service.search_with_coverage(state["query"])
         return {**state, "context": context, "sources": sources}
 
     def generate(state: AgentState) -> AgentState:

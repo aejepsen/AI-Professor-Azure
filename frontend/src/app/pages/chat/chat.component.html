@@ -1,16 +1,58 @@
 <div class="chat">
   <div class="chat__messages" #messagesContainer>
+    @if (messages.length === 0) {
+      <div class="chat__empty">
+        <div class="chat__empty-icon">
+          <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+            <circle cx="22" cy="22" r="21" stroke="var(--teal)" stroke-width="1.5" stroke-opacity="0.35"/>
+            <path d="M15 22h14M22 15v14" stroke="var(--teal)" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.65"/>
+          </svg>
+        </div>
+        <h2 class="chat__empty-title">O que você quer saber?</h2>
+        <p class="chat__empty-sub">Pergunte sobre qualquer conteúdo indexado na sua base de conhecimento.</p>
+        @if (auth.isLoggedIn()) {
+          <div class="chat__suggestions">
+            <button class="chat__suggestion" (click)="query = 'Quais são os principais temas abordados?'; send()">
+              Quais são os principais temas abordados?
+            </button>
+            <button class="chat__suggestion" (click)="query = 'Faça um resumo do conteúdo disponível.'; send()">
+              Faça um resumo do conteúdo disponível.
+            </button>
+            <button class="chat__suggestion" (click)="query = 'O que devo saber sobre este material?'; send()">
+              O que devo saber sobre este material?
+            </button>
+          </div>
+        }
+      </div>
+    }
+
     @for (msg of messages; track $index) {
       <div class="chat__bubble" [class.chat__bubble--user]="msg.role === 'user'" [class.chat__bubble--assistant]="msg.role === 'assistant'">
         <div class="chat__bubble-header">
           <span class="chat__role">{{ msg.role === 'user' ? 'Você' : 'Professor' }}</span>
-          @if (msg.role === 'assistant' && msg.text) {
+          @if (msg.role === 'assistant' && msg.text && !isStreaming) {
             <button class="chat__copy" (click)="copy(msg.text, $index)" title="Copiar resposta">
-              {{ copiedIndex === $index ? '✓' : '⎘' }}
+              @if (copiedIndex === $index) {
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7.5l3 3 6-6" stroke="var(--teal)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              } @else {
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4.5" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1.5 5.5v6a1 1 0 001 1h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              }
             </button>
           }
         </div>
-        <div class="chat__text" [innerHTML]="msg.html" contenteditable="true" spellcheck="false" (input)="$any($event.target).innerHTML = msg.html"></div>
+        <div
+          class="chat__text"
+          [class.chat__text--streaming]="isStreaming && msg.role === 'assistant' && $last"
+          [innerHTML]="msg.html"
+          spellcheck="false"
+        ></div>
+        @if (msg.role === 'assistant' && msg.sources?.length) {
+          <div class="chat__sources">
+            @for (s of msg.sources; track s) {
+              <span class="chat__source" [title]="s">{{ s }}</span>
+            }
+          </div>
+        }
       </div>
     }
   </div>
@@ -18,30 +60,43 @@
   @if (serverStatus === 'starting') {
     <div class="chat__warmup">
       <span class="chat__warmup-dot"></span>
-      Iniciando servidor{{ warmupAttempt > 0 ? ' (' + warmupAttempt * 5 + 's)' : '...' }}
+      Preparando o Professor{{ warmupAttempt > 2 ? ' — aguarde mais alguns instantes' : '...' }}
     </div>
   }
   @if (serverStatus === 'error') {
     <div class="chat__warmup chat__warmup--error">
-      Servidor indisponível. Recarregue a página.
+      Professor indisponível. Recarregue a página.
     </div>
   }
 
   @if (auth.isLoggedIn()) {
     <form class="chat__form" (submit)="$event.preventDefault(); send()">
       <textarea
+        #queryInput
         class="chat__input"
         [(ngModel)]="query"
         name="query"
-        placeholder="Faça uma pergunta sobre a aula..."
+        placeholder="Faça uma pergunta sobre o conteúdo..."
         rows="2"
+        (input)="onInput($event)"
         (keydown.enter)="$event.preventDefault(); send()"
       ></textarea>
-      <button class="chat__send" type="submit" [disabled]="!query.trim() || serverStatus !== 'ready'">Enviar</button>
+      <button class="chat__send" type="submit" [disabled]="!query.trim() || serverStatus !== 'ready' || isStreaming">
+        @if (isStreaming) {
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor" opacity="0.7"/>
+          </svg>
+        } @else {
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M14 8H2M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        }
+      </button>
     </form>
   } @else {
     <div class="chat__login-prompt">
-      <p>Faça login para conversar com o Professor.</p>
+      <p>Entre para conversar com o Professor.</p>
+      <button class="chat__login-btn" (click)="auth.login()">Entrar com Microsoft</button>
     </div>
   }
 </div>

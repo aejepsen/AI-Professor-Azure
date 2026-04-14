@@ -15,9 +15,10 @@ from backend.agents.rag_agent import AgentState, build_rag_graph
 @pytest.fixture()
 def knowledge_service():
     svc = MagicMock()
-    svc.search_with_coverage.return_value = [
-        {"text": "Férias são 30 dias corridos.", "source": "manual_ferias.pdf", "score": 0.95}
-    ]
+    svc.search_with_coverage.return_value = (
+        [{"text": "Férias são 30 dias corridos.", "source": "manual_ferias.pdf", "score": 0.95}],
+        ["manual_ferias.pdf"],
+    )
     return svc
 
 
@@ -76,7 +77,7 @@ def test_graph_passes_context_to_generate(rag_graph, knowledge_service, chat_ser
 
 def test_graph_empty_context_still_generates(knowledge_service, chat_service):
     """Qdrant sem resultados não deve impedir a geração de resposta."""
-    knowledge_service.search_with_coverage.return_value = []
+    knowledge_service.search_with_coverage.return_value = ([], [])
     chat_service.generate_stream.return_value = iter(["Não encontrei informações."])
 
     graph = build_rag_graph(knowledge_service, chat_service)

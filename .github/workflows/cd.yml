@@ -15,6 +15,9 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # GitHub Repository Variables (Settings → Variables → Actions)
+  CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME || 'ai-professor-backend' }}
+  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'ai-professor-prod-rg' }}
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -128,15 +131,24 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Salvar revisão ativa atual (para rollback)
+        id: prev
+        run: |
+          PREV=$(az containerapp revision list \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "[?properties.active==\`true\`] | [0].name" -o tsv 2>/dev/null || echo "")
+          echo "revision=$PREV" >> "$GITHUB_OUTPUT"
+
       - name: Deploy nova revisão
         run: |
           IMAGE="ghcr.io/${{ secrets.GHCR_USERNAME }}/ai-professor-backend:sha-${GITHUB_SHA::7}"
           az containerapp update \
-            --name ai-professor-backend \
-            --resource-group ai-professor-prod-rg \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
             --image "$IMAGE"
 
-      - name: Health check
+      - name: Health check (com rollback automático em falha)
         run: |
           URL="https://ai-professor-backend.bluedesert-c198f5d7.eastus.azurecontainerapps.io/health"
           for i in $(seq 1 24); do
@@ -148,17 +160,31 @@ jobs:
             echo "Aguardando... ($i/24) status=$STATUS"
             sleep 15
           done
-          echo "Health check falhou após 6 minutos"
+          echo "Health check falhou após 6 minutos — iniciando rollback"
+          PREV="${{ steps.prev.outputs.revision }}"
+          if [ -n "$PREV" ]; then
+            az containerapp ingress traffic set \
+              --name "$CONTAINER_APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --revision-weight "$PREV=100"
+            echo "Rollback para revisão $PREV concluído"
+          else
+            echo "Sem revisão anterior conhecida — rollback manual necessário"
+          fi
           exit 1
 
   # ---------------------------------------------------------------------------
-  # Deploy frontend — só quando frontend mudou (paralelo ao backend)
+  # Deploy frontend — aguarda backend quando ambos mudam; paralelo caso contrário
   # ---------------------------------------------------------------------------
   frontend-deploy:
     name: Frontend Deploy
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    needs: [changes, deploy]
+    # Roda se: frontend mudou E (backend não mudou OU deploy do backend foi bem-sucedido)
+    if: >-
+      always() &&
+      needs.changes.outputs.frontend == 'true' &&
+      (needs.changes.outputs.backend != 'true' || needs.deploy.result == 'success')
 
     steps:
       - uses: actions/checkout@v4

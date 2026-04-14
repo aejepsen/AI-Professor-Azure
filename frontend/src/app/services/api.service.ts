@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 
 const BACKEND_URL = 'https://ai-professor-backend.bluedesert-c198f5d7.eastus.azurecontainerapps.io';
 
+export type ChatEvent = { text: string } | { sources: string[] } | { error: string };
+
 export interface IngestResult {
   status: string;
   filename: string;
@@ -26,7 +28,7 @@ export class ApiService {
     throw new Error('Servidor não respondeu após 2 minutos.');
   }
 
-  async *chat(query: string, token: string): AsyncGenerator<string> {
+  async *chat(query: string, token: string): AsyncGenerator<ChatEvent> {
     const res = await fetch(`${BACKEND_URL}/chat/stream`, {
       method: 'POST',
       headers: {
@@ -55,7 +57,9 @@ export class ApiService {
         if (data === '[DONE]') return;
         try {
           const parsed = JSON.parse(data);
-          if (parsed.text) yield parsed.text;
+          if (parsed.text) yield { text: parsed.text };
+          else if (parsed.sources) yield { sources: parsed.sources };
+          else if (parsed.error) yield { error: parsed.error };
         } catch { /* ignorar linhas malformadas */ }
       }
     }

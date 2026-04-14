@@ -16,8 +16,8 @@ def service():
     with (
         patch("backend.services.ingest_service.aai"),
         patch("backend.services.ingest_service.QdrantClient") as MockQdrant,
-        patch("backend.services.ingest_service.SentenceTransformer") as MockDense,
-        patch("backend.services.ingest_service.Bm25") as MockSparse,
+        patch("backend.services.ingest_service.get_dense_model") as MockDense,
+        patch("backend.services.ingest_service.get_sparse_model") as MockSparse,
         patch("backend.services.ingest_service.settings") as s,
     ):
         s.assemblyai_api_key = "fake-key"

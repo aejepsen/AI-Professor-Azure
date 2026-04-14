@@ -2,14 +2,14 @@
   <div
     class="ingest__drop"
     [class.ingest__drop--loading]="state.loading"
+    [class.ingest__drop--drag-active]="isDragActive && !state.loading"
     (drop)="onDrop($event)"
     (dragover)="onDragOver($event)"
+    (dragleave)="onDragLeave()"
   >
     @if (state.loading) {
-      <div class="ingest__spinner"></div>
-
       @if (state.phase === 'upload') {
-        <p class="ingest__phase">Enviando para o servidor...</p>
+        <p class="ingest__phase">Enviando para a base de conhecimento...</p>
         <div class="ingest__progress-track">
           <div class="ingest__progress-bar" [style.width.%]="state.uploadPercent"></div>
         </div>
@@ -21,23 +21,34 @@
         </div>
         <p class="ingest__percent">{{ state.processingPercent | number:'1.0-0' }}%</p>
         @if (state.estimatedMinutes > 0) {
-          <p class="ingest__hint">Estimativa: ~{{ state.estimatedMinutes }} min</p>
+          <p class="ingest__hint">Estimativa: ~{{ state.estimatedMinutes }} min restantes</p>
         } @else {
           <p class="ingest__hint">Pode levar alguns minutos dependendo da duração do áudio.</p>
         }
       } @else {
-        <p>Processando...</p>
+        <p class="ingest__phase">Processando...</p>
       }
     } @else if (state.success) {
       <div class="ingest__success">
-        <p>✓ <strong>{{ state.filename }}</strong> indexado com <strong>{{ state.nChunks }}</strong> chunks.</p>
-        <button class="ingest__new" (click)="state.reset()">Enviar outro arquivo</button>
+        <svg class="ingest__success-icon" width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <circle cx="18" cy="18" r="17" stroke="var(--teal)" stroke-width="1.5"/>
+          <path d="M11 18.5l5 5 9-9" stroke="var(--teal)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p class="ingest__success-title"><strong>{{ state.filename }}</strong> indexado</p>
+        <p class="ingest__success-meta">{{ state.nChunks }} chunks na base de conhecimento</p>
+        <div class="ingest__success-actions">
+          <a class="ingest__chat-btn" routerLink="/chat">Perguntar ao Professor</a>
+          <button class="ingest__new" (click)="state.reset()">Enviar outro arquivo</button>
+        </div>
       </div>
     } @else {
       <label class="ingest__label">
         <input type="file" hidden accept=".mkv,.mp4,.mp3,.wav,.m4a,.webm" (change)="onFileSelected($any($event.target).files[0])">
-        <span class="ingest__icon">⬆</span>
-        <span>Arraste um vídeo/áudio ou clique para selecionar</span>
+        <svg class="ingest__icon" width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M16 22V10M10 16l6-6 6 6" stroke="var(--teal)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M6 26h20" stroke="var(--teal)" stroke-width="1.4" stroke-linecap="round" stroke-opacity="0.5"/>
+        </svg>
+        <span>Arraste um arquivo ou clique para selecionar</span>
         <small>.mkv · .mp4 · .mp3 · .wav · .m4a · .webm</small>
       </label>
     }

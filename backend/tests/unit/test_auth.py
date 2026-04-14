@@ -1,19 +1,21 @@
 """Testes unitários para o middleware de autenticação JWT.
 
 Usa par RSA real gerado em tempo de execução — os tokens são assinados com
-RS256 (mesmo algoritmo do Azure Entra ID) e o mock de _get_jwks retorna a
-chave pública PEM. Assim cada teste falha pelo motivo correto, não por
+RS256 (mesmo algoritmo do Azure Entra ID) e o mock de _get_jwks retorna JWKS
+com a chave pública. Assim cada teste falha pelo motivo correto, não por
 incompatibilidade de algoritmo.
 """
+import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
-from jose import jwt
+from jwt.algorithms import RSAAlgorithm
 
 TENANT_ID = "test-tenant-id"
 CLIENT_ID = "test-client-id"
@@ -28,10 +30,11 @@ PRIVATE_KEY_PEM: str = _RSA_PRIVATE_KEY.private_bytes(
     encryption_algorithm=serialization.NoEncryption(),
 ).decode()
 
-PUBLIC_KEY_PEM: str = _RSA_PRIVATE_KEY.public_key().public_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-).decode()
+# JWKS com a chave pública para uso nos mocks
+_PUBLIC_JWK = json.loads(RSAAlgorithm.to_jwk(_RSA_PRIVATE_KEY.public_key()))
+_PUBLIC_JWK["kid"] = "test-key-id"
+_PUBLIC_JWK["use"] = "sig"
+JWKS_RESPONSE: dict = {"keys": [_PUBLIC_JWK]}
 
 # Segundo par para simular assinatura com chave errada
 _RSA_OTHER_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -47,6 +50,7 @@ def _make_token(
     issuer: str = f"https://login.microsoftonline.com/{TENANT_ID}/v2.0",
     expired: bool = False,
     private_key: str = PRIVATE_KEY_PEM,
+    kid: str = "test-key-id",
 ) -> str:
     """Cria JWT RS256 assinado com a chave privada fornecida."""
     now = datetime.now(tz=timezone.utc)
@@ -58,7 +62,7 @@ def _make_token(
         "exp": exp,
         "iat": now,
     }
-    return jwt.encode(payload, private_key, algorithm="RS256")
+    return jwt.encode(payload, private_key, algorithm="RS256", headers={"kid": kid})
 
 
 @pytest.fixture()
@@ -72,9 +76,9 @@ def mock_settings():
 
 @pytest.fixture()
 def mock_jwks(mock_settings):
-    """Mocka _get_jwks para retornar a chave pública PEM real do par de teste."""
+    """Mocka _get_jwks para retornar JWKS com a chave pública do par de teste."""
     with patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as m:
-        m.return_value = PUBLIC_KEY_PEM
+        m.return_value = JWKS_RESPONSE
         yield m
 
 
@@ -92,7 +96,7 @@ async def test_valid_jwt_passes(mock_jwks):
 
 @pytest.mark.asyncio
 async def test_expired_jwt_returns_401(mock_jwks):
-    """Token expirado deve retornar 401 — motivo: Signature has expired."""
+    """Token expirado deve retornar 401 — motivo: Token expirado."""
     token = _make_token(expired=True)
     credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
@@ -101,7 +105,7 @@ async def test_expired_jwt_returns_401(mock_jwks):
     with pytest.raises(HTTPException) as exc_info:
         await get_current_user(credentials)
     assert exc_info.value.status_code == 401
-    assert "expired" in exc_info.value.detail.lower()
+    assert "expirado" in exc_info.value.detail.lower()
 
 
 @pytest.mark.asyncio
@@ -134,7 +138,7 @@ async def test_wrong_issuer_returns_401(mock_jwks):
 
 @pytest.mark.asyncio
 async def test_invalid_signature_returns_401(mock_jwks):
-    """Token assinado com chave RSA diferente deve retornar 401 — motivo: signature."""
+    """Token assinado com chave RSA diferente deve retornar 401."""
     token = _make_token(private_key=OTHER_PRIVATE_KEY_PEM)
     credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
@@ -206,10 +210,11 @@ async def test_get_jwks_usa_cache_na_segunda_chamada(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_get_jwks_propaga_erro_http(mock_settings):
-    """Falha na requisição HTTP (ex: timeout, 401) deve propagar a exceção."""
+async def test_get_jwks_retorna_503_apos_tres_tentativas(mock_settings):
+    """Após 3 tentativas com timeout, deve retornar HTTPException 503."""
     import backend.api.auth as auth_module
     import httpx
+    from fastapi import HTTPException
 
     auth_module._jwks_cache = None
 
@@ -219,5 +224,9 @@ async def test_get_jwks_propaga_erro_http(mock_settings):
     mock_http_client.__aexit__ = AsyncMock(return_value=False)
 
     with patch("backend.api.auth.httpx.AsyncClient", return_value=mock_http_client):
-        with pytest.raises(httpx.TimeoutException):
-            await auth_module._get_jwks()
+        with patch("backend.api.auth.asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(HTTPException) as exc_info:
+                await auth_module._get_jwks()
+
+    assert exc_info.value.status_code == 503
+    assert mock_http_client.get.call_count == 3  # exatamente 3 tentativas

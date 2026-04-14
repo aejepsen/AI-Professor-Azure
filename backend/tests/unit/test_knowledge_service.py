@@ -35,8 +35,8 @@ def mock_qdrant():
 @pytest.fixture()
 def service(mock_qdrant):
     with patch("backend.services.knowledge_service.settings") as s, \
-         patch("backend.services.knowledge_service.SentenceTransformer") as MockDense, \
-         patch("backend.services.knowledge_service.Bm25") as MockSparse:
+         patch("backend.services.knowledge_service.get_dense_model") as MockDense, \
+         patch("backend.services.knowledge_service.get_sparse_model") as MockSparse:
         s.qdrant_url = "http://fake-qdrant"
         s.qdrant_api_key = "fake-key"
 
@@ -121,7 +121,7 @@ def test_search_with_coverage_adds_missing_source(service, mock_qdrant):
         ([chunk_b], None),
     ]
 
-    results = service.search_with_coverage("alguma query")
+    results, sources = service.search_with_coverage("alguma query")
 
     sources_in_results = {r["source"] for r in results}
     assert "fonte_a.pdf" in sources_in_results
@@ -145,3 +145,38 @@ def test_search_rrf_merges_dense_and_sparse(service, mock_qdrant):
 
     # shared deve aparecer primeiro (score RRF maior)
     assert results[0]["text"] == "texto compartilhado"
+
+
+def test_list_sources_paginacao_multiplas_paginas(service, mock_qdrant):
+    """list_sources deve paginar via scroll cursor até next_offset=None."""
+    page1_point = MagicMock()
+    page1_point.payload = {"source": "fonte_a.pdf"}
+    page2_point = MagicMock()
+    page2_point.payload = {"source": "fonte_b.pdf"}
+
+    # Primeira chamada retorna next_offset="cursor-1"; segunda retorna None (fim)
+    mock_qdrant.scroll.side_effect = [
+        ([page1_point], "cursor-1"),
+        ([page2_point], None),
+    ]
+
+    result = service.list_sources()
+
+    assert mock_qdrant.scroll.call_count == 2
+    assert "fonte_a.pdf" in result
+    assert "fonte_b.pdf" in result
+    assert result == sorted(result)  # sempre retorna ordenado
+
+
+def test_list_sources_deduplica_fonte_repetida(service, mock_qdrant):
+    """list_sources deve deduplicar a mesma fonte que aparece em múltiplos pontos."""
+    point_a1 = MagicMock()
+    point_a1.payload = {"source": "fonte_a.pdf"}
+    point_a2 = MagicMock()
+    point_a2.payload = {"source": "fonte_a.pdf"}  # duplicata
+
+    mock_qdrant.scroll.return_value = ([point_a1, point_a2], None)
+
+    result = service.list_sources()
+
+    assert result == ["fonte_a.pdf"]  # uma só ocorrência

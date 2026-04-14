@@ -2,19 +2,21 @@
 from typing import Any
 
 import structlog
-from fastembed.sparse.bm25 import Bm25
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import FieldCondition, Filter, MatchValue, SparseVector
-from sentence_transformers import SentenceTransformer
 
 from backend.core.config import settings
+from backend.core.models import (
+    COLLECTION_NAME,
+    DENSE_MODEL_NAME,
+    SPARSE_MODEL_NAME,
+    get_dense_model,
+    get_sparse_model,
+)
 
 logger = structlog.get_logger()
 
-COLLECTION_NAME = "ai_professor_docs"
 DEFAULT_TOP_K = 4
-DENSE_MODEL = "intfloat/multilingual-e5-large"
-SPARSE_MODEL = "Qdrant/bm25"
 
 
 class KnowledgeService:
@@ -24,25 +26,33 @@ class KnowledgeService:
             api_key=settings.qdrant_api_key,
             timeout=10.0,
         )
-        self._dense = SentenceTransformer(DENSE_MODEL)
-        self._sparse = Bm25(SPARSE_MODEL)
+        self._dense = get_dense_model()
+        self._sparse = get_sparse_model()
 
     def list_sources(self) -> list[str]:
-        """Retorna lista de fontes únicas indexadas no Qdrant."""
+        """Retorna lista de fontes únicas indexadas no Qdrant (scroll completo, sem limite)."""
         try:
-            result, _ = self._client.scroll(
-                collection_name=COLLECTION_NAME,
-                limit=1000,
-                with_payload=["source"],
-                with_vectors=False,
-            )
             seen: set[str] = set()
-            sources = []
-            for point in result:
-                src = (point.payload or {}).get("source", "")
-                if src and src not in seen:
-                    seen.add(src)
-                    sources.append(src)
+            sources: list[str] = []
+            offset = None
+
+            while True:
+                result, next_offset = self._client.scroll(
+                    collection_name=COLLECTION_NAME,
+                    limit=1000,
+                    with_payload=["source"],
+                    with_vectors=False,
+                    offset=offset,
+                )
+                for point in result:
+                    src = (point.payload or {}).get("source", "")
+                    if src and src not in seen:
+                        seen.add(src)
+                        sources.append(src)
+                if next_offset is None:
+                    break
+                offset = next_offset
+
             return sorted(sources)
         except Exception as exc:
             logger.error("list_sources_failed", error=str(exc))
@@ -110,18 +120,28 @@ class KnowledgeService:
             for sid in top_ids
         ]
 
-    def search_with_coverage(self, query: str, top_k: int = DEFAULT_TOP_K) -> list[dict[str, Any]]:
+    def search_with_coverage(
+        self, query: str, top_k: int = DEFAULT_TOP_K
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         """
         Busca híbrida + garante ao menos 1 chunk por fonte indexada.
 
-        Para perguntas genéricas (ex: "liste os temas"), a busca semântica pode
-        não retornar chunks de todas as fontes. Este método complementa os
-        resultados com um chunk representativo de cada fonte não coberta.
+        Retorna uma tupla (results, sources) para evitar chamar list_sources() duas vezes
+        quando o chamador também precisa da lista de fontes.
+
+        Args:
+            query: Pergunta do usuário.
+            top_k: Número base de resultados da busca semântica.
+
+        Returns:
+            Tupla (results, sources) onde results é lista de chunks e sources é
+            lista ordenada de todas as fontes indexadas.
         """
+        sources = self.list_sources()
         results = self.search(query, top_k)
         covered = {r["source"] for r in results}
 
-        for source in self.list_sources():
+        for source in sources:
             if source in covered:
                 continue
             hits, _ = self._client.scroll(
@@ -142,4 +162,4 @@ class KnowledgeService:
                 })
                 covered.add(source)
 
-        return results
+        return results, sources

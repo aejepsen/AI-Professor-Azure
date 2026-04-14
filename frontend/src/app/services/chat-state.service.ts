@@ -5,6 +5,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   html: string;
+  sources?: string[];
 }
 
 @Injectable({ providedIn: 'root' })

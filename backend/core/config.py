@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     azure_storage_account_name: str
     azure_storage_account_key: str
     azure_storage_container: str = "uploads"
+    cors_origins: list[str] = [
+        "https://jolly-cliff-0e7c4130f.1.azurestaticapps.net",
+        "http://localhost:4200",
+    ]
+    environment: str = "production"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

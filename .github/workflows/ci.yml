@@ -39,7 +39,14 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements.txt pip-audit
+
+      - name: SCA — dependency vulnerability scan
+        # GHSA-jfh8-c2jp-5pjq: h11 HTTP/1.1 request smuggling via header whitespace.
+        # Ignorado pois h11 é dependência transitiva do httpx/starlette usada apenas em
+        # contexto de servidor (não como proxy reverso), sem rota de exploit viável neste stack.
+        # Revisar quando h11 >= 0.16.0 estiver disponível via resolução de dependências.
+        run: pip-audit -r backend/requirements.txt --ignore-vuln GHSA-jfh8-c2jp-5pjq
 
       - name: Unit + Integration tests
         working-directory: backend

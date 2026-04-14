@@ -1,0 +1,53 @@
+# =============================================================================
+# docker-compose.override.yml — Local development
+# Sobrescreve automaticamente o docker-compose.yml para dev local
+#
+# Uso:
+#   docker compose up backend          → sobe backend com hot-reload
+#   docker compose up                  → sobe backend + serviços terraform
+#
+# PRÉ-REQUISITO: .env preenchido com as variáveis de ambiente
+# =============================================================================
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: ai-professor-backend:dev
+    ports:
+      - "8000:8000"
+    volumes:
+      # Hot-reload: código local montado sobre o código no container
+      - ./backend:/app/backend
+    env_file:
+      - .env
+    # Dev: com --reload para hot-reload durante desenvolvimento
+    command: >
+      uvicorn backend.api.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true

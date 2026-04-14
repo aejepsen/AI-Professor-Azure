@@ -7,14 +7,16 @@ Conforme especificado no Execution Plan §2.1.6:
   - GET  /health retorna {"status": "ok"}
   - GET  /eval/search com RAGAS token retorna resultados
 """
+import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
-from jose import jwt as jose_jwt
-from datetime import datetime, timedelta, timezone
+from jwt.algorithms import RSAAlgorithm
 
 TENANT_ID = "test-tenant"
 CLIENT_ID = "test-client"
@@ -27,10 +29,12 @@ _PRIVATE_KEY_PEM = _RSA_KEY.private_bytes(
     format=serialization.PrivateFormat.TraditionalOpenSSL,
     encryption_algorithm=serialization.NoEncryption(),
 ).decode()
-_PUBLIC_KEY_PEM = _RSA_KEY.public_key().public_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-).decode()
+
+# JWKS com a chave pública para uso nos mocks de _get_jwks
+_PUBLIC_JWK = json.loads(RSAAlgorithm.to_jwk(_RSA_KEY.public_key()))
+_PUBLIC_JWK["kid"] = "test-key-id"
+_PUBLIC_JWK["use"] = "sig"
+JWKS_RESPONSE = {"keys": [_PUBLIC_JWK]}
 
 
 def _make_valid_token(audience: str = CLIENT_ID) -> str:
@@ -42,7 +46,7 @@ def _make_valid_token(audience: str = CLIENT_ID) -> str:
         "exp": now + timedelta(hours=1),
         "iat": now,
     }
-    return jose_jwt.encode(payload, _PRIVATE_KEY_PEM, algorithm="RS256")
+    return jwt.encode(payload, _PRIVATE_KEY_PEM, algorithm="RS256", headers={"kid": "test-key-id"})
 
 
 @pytest.fixture(autouse=True)
@@ -63,11 +67,11 @@ def mock_settings_env(monkeypatch):
 def client():
     with (
         patch("backend.services.knowledge_service.QdrantClient"),
-        patch("backend.services.knowledge_service.SentenceTransformer"),
-        patch("backend.services.knowledge_service.Bm25"),
+        patch("backend.services.knowledge_service.get_dense_model"),
+        patch("backend.services.knowledge_service.get_sparse_model"),
         patch("backend.services.ingest_service.QdrantClient"),
-        patch("backend.services.ingest_service.SentenceTransformer"),
-        patch("backend.services.ingest_service.Bm25"),
+        patch("backend.services.ingest_service.get_dense_model"),
+        patch("backend.services.ingest_service.get_sparse_model"),
         patch("backend.services.chat_service.anthropic.Anthropic"),
         patch("backend.agents.rag_agent.build_rag_graph"),
         patch("backend.services.blob_service.BlobServiceClient"),
@@ -77,25 +81,40 @@ def client():
 
 
 def test_health_returns_ok(client):
-    """GET /health deve retornar 200 com status ok."""
-    response = client.get("/health")
+    """GET /health deve retornar 200 com Qdrant respondendo."""
+    mock_qdrant = MagicMock()
+    mock_qdrant.get_collections.return_value = MagicMock()
+    with patch("backend.api.routes.health.QdrantClient", return_value=mock_qdrant):
+        response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["status"] == "ok"
+    assert response.json()["checks"]["qdrant"] == "ok"
+
+
+def test_health_returns_503_when_qdrant_down(client):
+    """GET /health deve retornar 503 quando Qdrant está indisponível."""
+    mock_qdrant = MagicMock()
+    mock_qdrant.get_collections.side_effect = Exception("Connection refused")
+    with patch("backend.api.routes.health.QdrantClient", return_value=mock_qdrant):
+        response = client.get("/health")
+    assert response.status_code == 503
+    assert response.json()["status"] == "degraded"
+    assert response.json()["checks"]["qdrant"] == "error"
 
 
 def test_chat_stream_without_token_returns_401(client):
-    """POST /chat/stream sem token deve retornar 401."""
+    """POST /chat/stream sem token deve retornar 403."""
     response = client.post("/chat/stream", json={"query": "test"})
     assert response.status_code == 403  # FastAPI retorna 403 quando Bearer ausente
 
 
 def test_chat_stream_with_invalid_token_returns_401(client):
     """POST /chat/stream com token inválido deve retornar 401."""
-    from jose import JWTError
+    from jwt import InvalidTokenError
 
     with patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks:
-        mock_jwks.return_value = "fake-key"
-        with patch("backend.api.auth.jwt.decode", side_effect=JWTError("invalid token")):
+        mock_jwks.return_value = JWKS_RESPONSE
+        with patch("backend.api.auth.jwt_decode", side_effect=InvalidTokenError("invalid token")):
             response = client.post(
                 "/chat/stream",
                 json={"query": "test"},
@@ -133,7 +152,7 @@ def test_chat_stream_with_valid_jwt_returns_sse_200(client):
         patch("backend.api.auth.settings") as mock_auth_settings,
         patch("backend.api.routes.chat._rag_graph", fake_graph),
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -161,7 +180,7 @@ def test_ingest_unsupported_format_returns_400(client):
         patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
         patch("backend.api.auth.settings") as mock_auth_settings,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -182,7 +201,7 @@ def test_ingest_valid_file_returns_200(client):
         patch("backend.api.auth.settings") as mock_auth_settings,
         patch("backend.api.routes.ingest._ingest_service") as mock_ingest,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -210,7 +229,7 @@ def test_ingest_arquivo_grande_retorna_413(client):
         patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
         patch("backend.api.auth.settings") as mock_auth_settings,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -230,7 +249,7 @@ def test_ingest_service_error_retorna_500(client):
         patch("backend.api.auth.settings") as mock_auth_settings,
         patch("backend.api.routes.ingest._ingest_service") as mock_ingest,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -251,7 +270,7 @@ def test_get_sas_token_formato_invalido_retorna_400(client):
         patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
         patch("backend.api.auth.settings") as mock_auth_settings,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -271,7 +290,7 @@ def test_get_sas_token_sucesso_retorna_url_e_blob_name(client):
         patch("backend.api.auth.settings") as mock_auth_settings,
         patch("backend.api.routes.ingest._blob_service") as mock_blob,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -294,7 +313,7 @@ def test_get_sas_token_erro_no_servico_retorna_500(client):
         patch("backend.api.auth.settings") as mock_auth_settings,
         patch("backend.api.routes.ingest._blob_service") as mock_blob,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -317,7 +336,7 @@ def test_process_blob_cria_job_e_retorna_job_id(client):
         patch("backend.api.routes.ingest._blob_service"),
         patch("backend.api.routes.ingest._ingest_service"),
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -332,28 +351,23 @@ def test_process_blob_cria_job_e_retorna_job_id(client):
     assert body["status"] == "processing"
 
 
-def test_process_blob_blob_name_com_espacos_e_especiais_aceito(client):
-    """POST /ingest/process com blob_name contendo espaços/acentos deve ser aceito (200)."""
+def test_process_blob_blob_name_path_traversal_retorna_422(client):
+    """POST /ingest/process com blob_name contendo '..' deve retornar 422."""
     token = _make_valid_token()
     with (
         patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
         patch("backend.api.auth.settings") as mock_auth_settings,
-        patch("backend.api.routes.ingest._blob_service") as mock_blob,
-        patch("backend.api.routes.ingest._ingest_service") as mock_ingest,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
-        mock_blob.get_read_url.return_value = "https://fake.blob.core.windows.net/uploads/fake"
-        mock_ingest.ingest_from_url.return_value = {"filename": "video.mp4", "n_chunks": 3, "status": "ok"}
         response = client.post(
             "/ingest/process",
-            json={"blob_name": "uuid/Análise Estatística Espacial I.mkv", "original_filename": "Análise Estatística Espacial I.mkv"},
+            json={"blob_name": "../other-container/secret.mp4", "original_filename": "video.mp4"},
             headers={"Authorization": f"Bearer {token}"},
         )
-    assert response.status_code == 200
-    assert "job_id" in response.json()
+    assert response.status_code == 422
 
 
 def test_get_job_status_nao_encontrado_retorna_404(client):
@@ -363,7 +377,7 @@ def test_get_job_status_nao_encontrado_retorna_404(client):
         patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
         patch("backend.api.auth.settings") as mock_auth_settings,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -385,7 +399,7 @@ def test_get_job_status_processing(client):
         patch("backend.api.auth.settings") as mock_auth_settings,
         patch.dict(ingest_module._jobs, {job_id: {"status": "processing"}}),
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -412,7 +426,7 @@ def test_get_job_status_done(client):
         patch("backend.api.auth.settings") as mock_auth_settings,
         patch.dict(ingest_module._jobs, {job_id: done_job}),
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -438,7 +452,7 @@ def test_get_job_status_error(client):
         patch("backend.api.auth.settings") as mock_auth_settings,
         patch.dict(ingest_module._jobs, {job_id: {"status": "error", "error": "Falhou"}}),
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -502,7 +516,7 @@ def test_chat_stream_with_wrong_audience_returns_401(client):
         patch("backend.api.auth._get_jwks", new_callable=AsyncMock) as mock_jwks,
         patch("backend.api.auth.settings") as mock_auth_settings,
     ):
-        mock_jwks.return_value = _PUBLIC_KEY_PEM
+        mock_jwks.return_value = JWKS_RESPONSE
         mock_auth_settings.azure_client_id = CLIENT_ID
         mock_auth_settings.azure_tenant_id = TENANT_ID
         mock_auth_settings.ragas_test_token = RAGAS_TOKEN
@@ -513,3 +527,28 @@ def test_chat_stream_with_wrong_audience_returns_401(client):
         )
 
     assert response.status_code == 401
+
+
+def test_chat_stream_com_ragas_token_retorna_403(client):
+    """POST /chat/stream com token RAGAS (role=eval) deve retornar 403.
+
+    Garante que require_human_user bloqueia tokens de CI/eval em endpoints
+    de uso humano — vetor de escalonamento de privilégio.
+    """
+    response = client.post(
+        "/chat/stream",
+        json={"query": "test"},
+        headers={"Authorization": f"Bearer {RAGAS_TOKEN}"},
+    )
+    assert response.status_code == 403
+    assert "avaliação" in response.json()["detail"].lower()
+
+
+def test_ingest_com_ragas_token_retorna_403(client):
+    """POST /ingest com token RAGAS (role=eval) deve retornar 403."""
+    response = client.post(
+        "/ingest",
+        files={"file": ("aula.mp3", b"fake", "audio/mpeg")},
+        headers={"Authorization": f"Bearer {RAGAS_TOKEN}"},
+    )
+    assert response.status_code == 403
