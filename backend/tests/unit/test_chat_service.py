@@ -3,7 +3,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.services.chat_service import ChatService, _format_context
+from backend.services.chat_service import MAX_CONTEXT_CHARS, ChatService, _format_context_with_budget
+
+
+def _format_context(chunks):
+    """Alias local para manter compatibilidade dos testes com a nova API com budget."""
+    return _format_context_with_budget(chunks, MAX_CONTEXT_CHARS)
 
 
 @pytest.fixture()

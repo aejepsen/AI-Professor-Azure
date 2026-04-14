@@ -13,7 +13,7 @@ structlog==24.1.0
 slowapi==0.1.9
 azure-storage-blob==12.20.0
 pytest>=9.0.3
-pytest-asyncio==0.23.6
+pytest-asyncio>=0.24.0
 pytest-cov==5.0.0
 black>=25.0.0
 isort==5.13.2
