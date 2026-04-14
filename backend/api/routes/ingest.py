@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
 from backend.api._limiter import limiter
@@ -73,6 +73,7 @@ def _cleanup_stale_jobs() -> None:
 @limiter.limit("3/minute")
 async def ingest_video(
     request: Request,
+    response: Response,
     file: UploadFile,
     _user: dict[str, Any] = Depends(require_human_user),
 ) -> dict[str, Any]:
@@ -136,6 +137,7 @@ async def ingest_video(
 @limiter.limit("10/minute")
 async def get_sas_token(
     request: Request,
+    response: Response,
     filename: str = Query(..., description="Nome do arquivo a ser enviado"),
     _user: dict[str, Any] = Depends(require_human_user),
 ) -> dict[str, str]:
@@ -179,6 +181,7 @@ class ProcessRequest(BaseModel):
 @limiter.limit("5/minute")
 async def process_blob(
     request: Request,
+    response: Response,
     body: ProcessRequest,
     background_tasks: BackgroundTasks,
     _user: dict[str, Any] = Depends(require_human_user),

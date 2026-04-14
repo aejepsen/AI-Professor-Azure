@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt
 import pytest
+from slowapi.extension import Limiter
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
@@ -47,6 +48,16 @@ def _make_valid_token(audience: str = CLIENT_ID) -> str:
         "iat": now,
     }
     return jwt.encode(payload, _PRIVATE_KEY_PEM, algorithm="RS256", headers={"kid": "test-key-id"})
+
+
+@pytest.fixture(autouse=True)
+def disable_rate_limits():
+    """Desabilita rate limiting para isolar testes de ordem e contagem de requests."""
+    with (
+        patch.object(Limiter, "_check_request_limit"),
+        patch.object(Limiter, "_inject_headers"),
+    ):
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -94,7 +105,7 @@ def test_health_returns_ok(client):
 def test_health_returns_503_when_qdrant_down(client):
     """GET /health deve retornar 503 quando Qdrant está indisponível."""
     mock_qdrant = MagicMock()
-    mock_qdrant.get_collections.side_effect = Exception("Connection refused")
+    mock_qdrant.get_collections.side_effect = ConnectionError("Connection refused")
     with patch("backend.api.routes.health.QdrantClient", return_value=mock_qdrant):
         response = client.get("/health")
     assert response.status_code == 503
@@ -103,9 +114,9 @@ def test_health_returns_503_when_qdrant_down(client):
 
 
 def test_chat_stream_without_token_returns_401(client):
-    """POST /chat/stream sem token deve retornar 403."""
+    """POST /chat/stream sem token deve retornar 401."""
     response = client.post("/chat/stream", json={"query": "test"})
-    assert response.status_code == 403  # FastAPI retorna 403 quando Bearer ausente
+    assert response.status_code == 401
 
 
 def test_chat_stream_with_invalid_token_returns_401(client):
@@ -167,10 +178,10 @@ def test_chat_stream_with_valid_jwt_returns_sse_200(client):
     assert "30 dias" in response.text
 
 
-def test_ingest_without_token_returns_403(client):
-    """POST /ingest sem token deve retornar 403."""
+def test_ingest_without_token_returns_401(client):
+    """POST /ingest sem token deve retornar 401."""
     response = client.post("/ingest", files={"file": ("aula.mp3", b"fake", "audio/mpeg")})
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_ingest_unsupported_format_returns_400(client):
@@ -210,9 +221,10 @@ def test_ingest_valid_file_returns_200(client):
             "n_chunks": 12,
             "duration_sec": 3600.0,
         }
+        # b"\xff\xfb" = MP3 frame sync (magic bytes válidos)
         response = client.post(
             "/ingest",
-            files={"file": ("aula.mp3", b"fake-audio", "audio/mpeg")},
+            files={"file": ("aula.mp3", b"\xff\xfb" + b"\x00" * 10, "audio/mpeg")},
             headers={"Authorization": f"Bearer {token}"},
         )
     assert response.status_code == 200
@@ -256,7 +268,7 @@ def test_ingest_service_error_retorna_500(client):
         mock_ingest.ingest.side_effect = RuntimeError("AssemblyAI falhou")
         response = client.post(
             "/ingest",
-            files={"file": ("aula.mp3", b"audio", "audio/mpeg")},
+            files={"file": ("aula.mp3", b"\xff\xfb" + b"\x00" * 10, "audio/mpeg")},
             headers={"Authorization": f"Bearer {token}"},
         )
     assert response.status_code == 500

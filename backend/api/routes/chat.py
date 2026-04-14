@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from backend.agents.rag_agent import AgentState, build_rag_graph
@@ -29,6 +29,7 @@ _RAG_TIMEOUT_SECONDS = 60.0
 @limiter.limit("30/minute")
 async def chat_stream(
     request: Request,
+    response: Response,
     body: ChatRequest,
     user: dict[str, Any] = Depends(require_human_user),
 ) -> StreamingResponse:
@@ -75,6 +76,7 @@ async def chat_stream(
 @limiter.limit("60/minute")
 async def eval_search(
     request: Request,
+    response: Response,
     query: str = Query(..., max_length=1000),
     limit: int = Query(default=5, ge=1, le=20),
     _user: dict[str, Any] = Depends(get_current_user),
