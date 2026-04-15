@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ApiService } from './api.service';
 import { vi } from 'vitest';
 
-const BACKEND_URL = 'https://ai-professor-backend.bluedesert-c198f5d7.eastus.azurecontainerapps.io';
+const BACKEND_URL = 'https://ai-professor-backend.bravebush-60555594.eastus.azurecontainerapps.io';
 
 describe('ApiService', () => {
   let service: ApiService;

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-const BACKEND_URL = 'https://ai-professor-backend.bluedesert-c198f5d7.eastus.azurecontainerapps.io';
+const BACKEND_URL = 'https://ai-professor-backend.bravebush-60555594.eastus.azurecontainerapps.io';
 
 export type ChatEvent = { text: string } | { sources: string[] } | { error: string };
 
