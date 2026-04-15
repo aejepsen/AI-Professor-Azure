@@ -151,7 +151,12 @@ jobs:
 
       - name: Health check (com rollback automático em falha)
         run: |
-          URL="https://ai-professor-backend.bluedesert-c198f5d7.eastus.azurecontainerapps.io/health"
+          URL=$(az containerapp show \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          URL="https://${URL}/health"
+          echo "Health check URL: $URL"
           for i in $(seq 1 24); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$URL" || echo "000")
             if [ "$STATUS" = "200" ]; then
@@ -164,10 +169,10 @@ jobs:
           echo "Health check falhou após 6 minutos — iniciando rollback"
           PREV="${{ steps.prev.outputs.revision }}"
           if [ -n "$PREV" ]; then
-            az containerapp ingress traffic set \
+            az containerapp revision activate \
               --name "$CONTAINER_APP_NAME" \
               --resource-group "$RESOURCE_GROUP" \
-              --revision-weight "$PREV=100"
+              --revision "$PREV" || echo "Rollback via revisão falhou — verificar manualmente"
             echo "Rollback para revisão $PREV concluído"
           else
             echo "Sem revisão anterior conhecida — rollback manual necessário"
