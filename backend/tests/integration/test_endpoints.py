@@ -100,7 +100,7 @@ def test_health_returns_ok(client):
     """GET /health deve retornar 200 com Qdrant respondendo."""
     mock_qdrant = MagicMock()
     mock_qdrant.get_collections.return_value = MagicMock()
-    with patch("backend.api.routes.health.QdrantClient", return_value=mock_qdrant):
+    with patch("backend.api.routes.health._get_qdrant_client", return_value=mock_qdrant):
         response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -111,7 +111,7 @@ def test_health_returns_503_when_qdrant_down(client):
     """GET /health deve retornar 503 quando Qdrant está indisponível."""
     mock_qdrant = MagicMock()
     mock_qdrant.get_collections.side_effect = ConnectionError("Connection refused")
-    with patch("backend.api.routes.health.QdrantClient", return_value=mock_qdrant):
+    with patch("backend.api.routes.health._get_qdrant_client", return_value=mock_qdrant):
         response = client.get("/health")
     assert response.status_code == 503
     assert response.json()["status"] == "degraded"
