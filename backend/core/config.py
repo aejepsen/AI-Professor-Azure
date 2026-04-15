@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     azure_storage_account_key: str
     azure_storage_container: str = "uploads"
     cors_origins: list[str] = [
-        "https://jolly-cliff-0e7c4130f.1.azurestaticapps.net",
+        "https://red-moss-0108f120f.7.azurestaticapps.net",
         "http://localhost:4200",
     ]
     environment: str = "production"
