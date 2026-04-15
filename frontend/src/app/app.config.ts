@@ -45,3 +45,4 @@ export const appConfig: ApplicationConfig = {
     { provide: MSAL_INSTANCE, useValue: msalInstance },
   ],
 };
+
