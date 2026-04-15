@@ -129,34 +129,77 @@ npm start
 
 ---
 
+## Produção
+
+| Recurso | URL |
+|---|---|
+| **Frontend** | https://red-moss-0108f120f.7.azurestaticapps.net |
+| **Backend** | https://ai-professor-backend.bravebush-60555594.eastus.azurecontainerapps.io |
+| **Health** | https://ai-professor-backend.bravebush-60555594.eastus.azurecontainerapps.io/health |
+
+> ⚠️ O Container App environment ID (`bravebush-60555594`) muda a cada `terraform destroy + apply`. Sempre verificar com `az containerapp show --query "properties.configuration.ingress.fqdn"` e atualizar `frontend/src/app/services/api.service.ts` e `backend/core/config.py`.
+
+---
+
 ## Deploy
+
+### Pre-deploy obrigatório (antes de qualquer push)
+
+```bash
+# 1. Testes
+python -m pytest backend/tests/unit/ -q --tb=short
+
+# 2. Dependencias em venv limpo
+python -m venv /tmp/test-venv && source /tmp/test-venv/bin/activate
+pip install -r backend/requirements-prod.txt -q
+python -c "import fastapi, uvicorn, multipart, sentence_transformers, torch; print(torch.__version__)"
+deactivate && rm -rf /tmp/test-venv
+
+# 3. Verificar URLs — nunca confiar no hardcoded
+az containerapp show --name ai-professor-backend --resource-group ai-professor-prod-rg \
+  --query "properties.configuration.ingress.fqdn" -o tsv
+```
+
+Consulte a skill `/hm-azure-ml-deploy` para o checklist completo de armadilhas conhecidas.
 
 ### Infraestrutura (primeira vez ou após terraform destroy)
 
 ```bash
 cd infra/terraform
 terraform init
-terraform apply -var-file="prod.tfvars"
+terraform plan -out=tfplan -var-file="prod.tfvars"   # revisar antes de apply
+terraform apply tfplan
 ```
 
-Após o apply, atualizar o GitHub Secret `AZURE_STATIC_WEB_APPS_API_TOKEN` com o novo token:
-
+Após o apply:
 ```bash
+terraform output                                          # anotar todas as URLs
+az ad app show --id <api-client-id> --query identifierUris  # deve estar preenchido
+# Se identifierUris vazio:
+az ad app update --id <api-client-id> --identifier-uris "api://<api-client-id>"
+
+# Atualizar GitHub Secret com novo token do SWA:
 terraform output -raw static_web_app_api_key
+
+# Atualizar URLs hardcoded no frontend e config:
+# frontend/src/app/services/api.service.ts → BACKEND_URL
+# frontend/src/app/app.config.ts → clientId (terraform state show azuread_application.frontend | grep client_id)
+# backend/core/config.py → cors_origins
 ```
 
 ### Aplicação
 
-Push para a branch `main` dispara o workflow de CD automaticamente:
+Push para `main` dispara CD automaticamente. Para forçar deploy manual:
 
-```
+```bash
 git push origin main
+# ou workflow_dispatch via GitHub Actions UI (deploya backend + frontend)
 ```
 
 O GitHub Actions:
-1. Faz build da imagem Docker e push para GHCR
-2. Atualiza o Container App com a nova imagem
-3. Deploy do frontend no Azure Static Web Apps
+1. Detecta quais partes mudaram (`backend/**` ou `frontend/**`)
+2. Testes Python → Build Docker → Push GHCR → Deploy Container App
+3. Deploy do Angular no Azure Static Web Apps (paralelo ou sequencial)
 
 ---
 

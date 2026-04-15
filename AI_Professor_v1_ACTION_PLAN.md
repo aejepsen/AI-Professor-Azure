@@ -539,3 +539,42 @@ blob_properties {
 `KnowledgeService.list_sources()` consulta o Qdrant em tempo real (scroll na collection) e retorna a lista de fontes únicas indexadas. O `retrieve` node do LangGraph adiciona essa lista ao estado, e o `ChatService` a injeta no system prompt a cada requisição. Claude pode então listar os assuntos disponíveis dinamicamente, sem hardcode.
 
 ---
+
+## 14. ESTADO DE PRODUÇÃO E REFERÊNCIAS
+
+### 14.1 URLs de produção (2026-04-15)
+
+| Recurso | URL |
+|---|---|
+| Frontend | https://red-moss-0108f120f.7.azurestaticapps.net |
+| Backend | https://ai-professor-backend.bravebush-60555594.eastus.azurecontainerapps.io |
+| Health | https://ai-professor-backend.bravebush-60555594.eastus.azurecontainerapps.io/health |
+
+> ⚠️ O environment ID do Container App (`bravebush-60555594`) muda a cada `terraform destroy + apply`. Após qualquer re-apply, executar o protocolo de atualização de URLs do EXECUTION_PLAN (seção "Lições Aprendidas — Deploy de Produção").
+
+### 14.2 App Registrations (Entra ID)
+
+| App | Client ID | Uso |
+|---|---|---|
+| ai-professor-api | `087f139e-7252-49cf-ab70-abb64eac8667` | Backend — validação JWT |
+| ai-professor-frontend | `5b54bd0b-2be8-49ea-bab0-668a0b444676` | MSAL SPA login |
+
+### 14.3 Skill de deploy
+
+Para todos os deploys futuros deste projeto ou projetos similares (Azure Container Apps + ML models), usar a skill `/hm-azure-ml-deploy`. Ela documenta todas as armadilhas conhecidas e o protocolo de validação local obrigatório antes de qualquer push.
+
+```
+/hm-azure-ml-deploy <path-do-projeto>
+```
+
+### 14.4 Dependências críticas com versão fixa
+
+| Pacote | Versão | Motivo do pin |
+|---|---|---|
+| `torch` | `2.2.2+cpu` via PyTorch CPU index | torch padrão instala CUDA (5.5GB extras) |
+| `sentence-transformers` | `3.0.1` | Compatível com lazy loading pattern adotado |
+| `assemblyai` | `0.59.0` | Versões < 0.30.0 não suportam `speech_models` (plural, lista) |
+| `python-multipart` | `0.0.9` | Obrigatório para FastAPI file upload — ausência crasha uvicorn |
+
+---
+

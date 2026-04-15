@@ -146,9 +146,9 @@ terraform apply tfplan
 - [x] `terraform apply` sem erros
 - [x] Todos os recursos declarados no Terraform (Container App, Static Web App, Blob Storage, App Registrations)
 - [x] Terraform state remoto configurado (`aiprofessortfstate` em `ai-professor-tfstate-rg`)
-- [x] Container App provisionado e Running (`ai-professor-backend`, 0.5 CPU / 2Gi, min_replicas=0)
+- [x] Container App provisionado e Running (`ai-professor-backend`, 1.0 CPU / 2.0Gi, min_replicas=0)
 - [x] Container App tem todas as env vars configuradas via secrets
-- [x] Static Web App provisionado: `https://jolly-cliff-0e7c4130f.1.azurestaticapps.net`
+- [x] Static Web App provisionado: `https://red-moss-0108f120f.7.azurestaticapps.net`
 - [x] App Registrations criados com escopo `access_as_user` visível no portal
 - [x] Azure Blob Storage provisionado: conta `aiprofessorstorage`, container `uploads`, CORS configurado
 - [x] Qdrant Cloud collection `ai_professor_docs` com vetores dense (multilingual-e5-large) e sparse (BM25)
@@ -695,3 +695,57 @@ curl {API_URL}/metrics
 | Keepalive causando custo inesperado | Ping a cada 90s mantinha container ativo 24/7 (2 CPU / 4Gi) → R$21 de custo | Remover keepalive; warmup exibe "Iniciando servidor..." no cold start |
 | Container spec superdimensionada | Spec inicial de 2 CPU / 4Gi sem base em dados reais | Medir via Azure Monitor antes de dimensionar: uso real ~1.56 GB → spec 0.5 CPU / 2Gi |
 | Build Angular quebrando com `$event.target.innerHTML` | TypeScript strict templates rejeita `EventTarget.innerHTML` (tipo genérico) | Usar `$any($event.target).innerHTML` para bypass pontual de tipo |
+
+---
+
+## LIÇÕES APRENDIDAS — DEPLOY DE PRODUÇÃO (2026-04-15)
+
+> Sessão de primeiro deploy real para Azure. 8+ iterações de CD falhas. Todas as causas podiam ter sido detectadas localmente.
+
+| Sintoma | Causa raiz | Solução | Prevenção |
+|---|---|---|---|
+| status=000 no health check | `python-multipart` ausente em `requirements-prod.txt` — uvicorn crasha antes de abrir porta | Adicionar `python-multipart==0.0.9` | Testar `pip install -r requirements-prod.txt` em venv limpo antes de push |
+| status=000 no health check | OOM: `sentence-transformers` (~800MB) carregado no `__init__` com `memory=1.0Gi` | Lazy loading via `@property` + `memory=2.0Gi` | Nunca carregar modelos ML no `__init__`; spec mínima: `cpu=1.0 / memory=2.0Gi` |
+| Imagem Docker 8GB | `torch` instalado com CUDA completo (5.5GB extras) | `torch==2.2.2+cpu` via `--extra-index-url https://download.pytorch.org/whl/cpu` | Verificar tamanho com `docker images` antes do push |
+| "Professor indisponível" | `BACKEND_URL` no frontend apontava para environment antigo (`bluedesert`) | Atualizar para URL atual (`bravebush`) | Após `terraform apply`, sempre atualizar `api.service.ts` e `config.py` |
+| AADSTS500011 no login | `identifierUri` da App Registration da API vazia após `terraform apply` | `az ad app update --identifier-uris "api://<id>"` | Sempre verificar `az ad app show --query identifierUris` após apply |
+| AADSTS700016 no login | `clientId` MSAL no `app.config.ts` era de app registration inexistente | Usar `terraform state show azuread_application.frontend \| grep client_id` | Sincronizar clientId via `terraform output` após cada apply |
+| Frontend nunca deployado | `dorny/paths-filter` retorna `false` em `workflow_dispatch` — job pulado em todos os deploys | Adicionar step `final` que força `true` quando `event_name == workflow_dispatch` | Estrutura obrigatória do workflow documentada na skill `/hm-azure-ml-deploy` |
+| `speech_model deprecated` | AssemblyAI SDK mudou param para `speech_models` (plural, lista) | `speech_models=[aai.SpeechModel.universal]` | Testar SDK updates com `pip install assemblyai --dry-run` antes de fixar versão |
+| Probe config inválida | Atributos Terraform errados: `period_seconds`, `failure_threshold` | `interval_seconds`, `failure_count_threshold` | Validar `terraform validate` + `plan` antes de push infra |
+| Rollback falha em CD | `revision-weight` requer multi-revision mode; app usa single | `az containerapp revision activate` | Documentado no workflow de CD |
+| CORS bloqueando frontend | `cors_origins` tinha URL antiga do SWA (`jolly-cliff`) | Atualizar para URL atual (`red-moss`) | Mesmo item: atualizar após `terraform apply` |
+
+### Protocolo pós-`terraform apply` (obrigatório)
+
+```bash
+# 1. Obter todas as URLs novas
+terraform output
+
+# 2. Verificar Entra ID
+az ad app show --id <api-client-id> --query identifierUris
+# Se vazio: az ad app update --id <id> --identifier-uris "api://<id>"
+
+# 3. Atualizar URLs hardcoded no código
+# frontend/src/app/services/api.service.ts → BACKEND_URL
+# frontend/src/app/app.config.ts → clientId (terraform state show azuread_application.frontend | grep client_id)
+# backend/core/config.py → cors_origins
+
+# 4. Atualizar GitHub Secret SWA
+terraform output -raw static_web_app_api_key
+# → Settings → Secrets → AZURE_STATIC_WEB_APPS_API_TOKEN
+
+# 5. Rodar testes e push
+python -m pytest backend/tests/unit/ -q
+git add -p && git commit && git push
+```
+
+### Estado de produção (2026-04-15)
+
+| Recurso | URL | Status |
+|---|---|---|
+| Frontend | https://red-moss-0108f120f.7.azurestaticapps.net | ✅ Online |
+| Backend | https://ai-professor-backend.bravebush-60555594.eastus.azurecontainerapps.io | ✅ Online |
+| Health | `.../health` → `{"status":"ok","checks":{"qdrant":"ok"}}` | ✅ OK |
+| Container | 1.0 CPU / 2.0Gi / scale-to-zero | ✅ Configurado |
+| Budget alert | R$ ~80/mês (USD 10 @ 80% actual + 100% forecast) | ✅ Ativo |
