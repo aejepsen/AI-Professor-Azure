@@ -23,5 +23,8 @@ ghcr_token          = "ghp_..."  # PAT com permissões: read:packages, write:pac
 # Container image
 container_image     = "ghcr.io/seu-usuario/ai-professor-backend:latest"
 
+# Budget Alert
+budget_alert_email  = "seu-email@exemplo.com"  # Recebe alerta ao atingir 80% de USD 10/mês
+
 # Nota: Azure Storage Account é criado pelo Terraform — não precisa de variável aqui.
 # A chave de acesso é referenciada diretamente via azurerm_storage_account.uploads.primary_access_key

@@ -80,3 +80,8 @@ variable "ghcr_token" {
   type        = string
   sensitive   = true
 }
+
+variable "budget_alert_email" {
+  description = "Email para alertas de custo Azure (Budget Alert)"
+  type        = string
+}

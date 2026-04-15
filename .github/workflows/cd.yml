@@ -157,16 +157,16 @@ jobs:
             --query "properties.configuration.ingress.fqdn" -o tsv)
           URL="https://${URL}/health"
           echo "Health check URL: $URL"
-          for i in $(seq 1 24); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$URL" || echo "000")
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$URL" || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Health check ok ($STATUS)"
               exit 0
             fi
-            echo "Aguardando... ($i/24) status=$STATUS"
-            sleep 15
+            echo "Aguardando... ($i/12) status=$STATUS"
+            sleep 10
           done
-          echo "Health check falhou após 6 minutos — iniciando rollback"
+          echo "Health check falhou após 2 minutos — iniciando rollback"
           PREV="${{ steps.prev.outputs.revision }}"
           if [ -n "$PREV" ]; then
             az containerapp revision activate \
