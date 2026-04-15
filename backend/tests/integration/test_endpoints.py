@@ -52,12 +52,17 @@ def _make_valid_token(audience: str = CLIENT_ID) -> str:
 
 @pytest.fixture(autouse=True)
 def disable_rate_limits():
-    """Desabilita rate limiting para isolar testes de ordem e contagem de requests."""
-    with (
-        patch.object(Limiter, "_check_request_limit"),
-        patch.object(Limiter, "_inject_headers"),
-    ):
+    """Desabilita rate limiting para isolar testes de ordem e contagem de requests.
+
+    _headers_enabled=False evita que async_wrapper acesse request.state.view_rate_limit
+    (que só existe quando _check_request_limit executa de verdade).
+    _check_request_limit mockado evita 429 por acúmulo de chamadas no mesmo IP.
+    """
+    from backend.api._limiter import limiter
+    limiter._headers_enabled = False
+    with patch.object(Limiter, "_check_request_limit"):
         yield
+    limiter._headers_enabled = True
 
 
 @pytest.fixture(autouse=True)
