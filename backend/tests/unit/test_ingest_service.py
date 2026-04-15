@@ -101,7 +101,7 @@ def test_ensure_collection_nao_cria_quando_ja_existe(service):
 
 def test_index_envia_pontos_ao_qdrant(service):
     chunks = ["chunk A", "chunk B"]
-    service._dense.encode.return_value = np.zeros((2, 1024))
+    service.dense.encode.return_value = np.zeros((2, 1024))
 
     sv1 = MagicMock()
     sv1.indices = np.array([0])
@@ -109,7 +109,7 @@ def test_index_envia_pontos_ao_qdrant(service):
     sv2 = MagicMock()
     sv2.indices = np.array([1])
     sv2.values = np.array([0.8])
-    service._sparse.embed.return_value = iter([sv1, sv2])
+    service.sparse.embed.return_value = iter([sv1, sv2])
 
     service._index(chunks, source="aula.mp4")
 
@@ -121,8 +121,8 @@ def test_index_envia_pontos_ao_qdrant(service):
 
 
 def test_index_lista_vazia_chama_upsert_sem_pontos(service):
-    service._dense.encode.return_value = np.zeros((0, 1024))
-    service._sparse.embed.return_value = iter([])
+    service.dense.encode.return_value = np.zeros((0, 1024))
+    service.sparse.embed.return_value = iter([])
     service._index([], source="vazio.mp4")
     service._qdrant.upsert.assert_called_once()
 

@@ -26,8 +26,21 @@ class KnowledgeService:
             api_key=settings.qdrant_api_key,
             timeout=10.0,
         )
-        self._dense = get_dense_model()
-        self._sparse = get_sparse_model()
+        # Modelos carregados sob demanda — evita OOM no startup do container
+        self._dense = None
+        self._sparse = None
+
+    @property
+    def dense(self):  # type: ignore[return]
+        if self._dense is None:
+            self._dense = get_dense_model()
+        return self._dense
+
+    @property
+    def sparse(self):  # type: ignore[return]
+        if self._sparse is None:
+            self._sparse = get_sparse_model()
+        return self._sparse
 
     def list_sources(self) -> list[str]:
         """Retorna lista de fontes únicas indexadas no Qdrant (scroll completo, sem limite)."""
@@ -72,8 +85,8 @@ class KnowledgeService:
         if not query.strip():
             return []
 
-        q_dense = self._dense.encode("query: " + query, normalize_embeddings=True).tolist()
-        q_sparse_raw = list(self._sparse.embed([query]))[0]
+        q_dense = self.dense.encode("query: " + query, normalize_embeddings=True).tolist()
+        q_sparse_raw = list(self.sparse.embed([query]))[0]
         q_sparse = SparseVector(
             indices=q_sparse_raw.indices.tolist(),
             values=q_sparse_raw.values.tolist(),

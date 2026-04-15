@@ -51,7 +51,7 @@ def service(mock_qdrant):
         sparse.embed.return_value = iter([sparse_vec])
         MockSparse.return_value = sparse
 
-        return KnowledgeService()
+        yield KnowledgeService()
 
 
 def test_search_returns_results(service, mock_qdrant):

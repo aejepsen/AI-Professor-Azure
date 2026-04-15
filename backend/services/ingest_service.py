@@ -38,8 +38,21 @@ class IngestService:
             api_key=settings.qdrant_api_key,
             timeout=30.0,
         )
-        self._dense = get_dense_model()
-        self._sparse = get_sparse_model()
+        # Modelos carregados sob demanda — evita OOM no startup do container
+        self._dense = None
+        self._sparse = None
+
+    @property
+    def dense(self):  # type: ignore[return]
+        if self._dense is None:
+            self._dense = get_dense_model()
+        return self._dense
+
+    @property
+    def sparse(self):  # type: ignore[return]
+        if self._sparse is None:
+            self._sparse = get_sparse_model()
+        return self._sparse
 
     def ingest(self, file_bytes: bytes, filename: str) -> dict[str, Any]:
         """
@@ -139,8 +152,8 @@ class IngestService:
         self._ensure_collection()
 
         texts_passage = ["passage: " + c for c in chunks]
-        dense_vecs = self._dense.encode(texts_passage, batch_size=16, normalize_embeddings=True)
-        sparse_vecs = list(self._sparse.embed(chunks))
+        dense_vecs = self.dense.encode(texts_passage, batch_size=16, normalize_embeddings=True)
+        sparse_vecs = list(self.sparse.embed(chunks))
 
         points = [
             PointStruct(
