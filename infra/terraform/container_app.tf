@@ -144,16 +144,24 @@ resource "azurerm_container_app" "backend" {
         secret_name = "storage-container"
       }
 
+      # Liveness: só verifica que o processo responde — sem I/O externo
       liveness_probe {
-        transport = "HTTP"
-        path      = "/health"
-        port      = 8000
+        transport        = "HTTP"
+        path             = "/health/live"
+        port             = 8000
+        initial_delay    = 10
+        period_seconds   = 15
+        failure_threshold = 3
       }
 
+      # Readiness: verifica Qdrant — aguarda 20s antes de começar
       readiness_probe {
-        transport = "HTTP"
-        path      = "/health"
-        port      = 8000
+        transport        = "HTTP"
+        path             = "/health/ready"
+        port             = 8000
+        initial_delay    = 20
+        period_seconds   = 15
+        failure_threshold = 3
       }
     }
   }

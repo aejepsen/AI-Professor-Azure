@@ -1,4 +1,9 @@
-"""Endpoint de health check com verificação de dependências."""
+"""Endpoints de health check separados por responsabilidade.
+
+/health/live  — liveness: processo está vivo? (sem I/O externo)
+/health/ready — readiness: dependências alcançáveis? (Qdrant)
+/health       — alias de /health/ready (compatibilidade)
+"""
 import structlog
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -10,29 +15,46 @@ from backend.core.config import settings
 logger = structlog.get_logger()
 router = APIRouter()
 
+# Cliente Qdrant reutilizável — não instanciar a cada probe
+_qdrant_client: QdrantClient | None = None
 
-@router.get("/health")
-async def health() -> dict[str, object]:
-    """Verifica conectividade com Qdrant. Retorna 503 se dependência crítica falhar."""
-    checks: dict[str, str] = {}
 
-    # Qdrant — dependência crítica para RAG
-    try:
-        client = QdrantClient(
+def _get_qdrant_client() -> QdrantClient:
+    global _qdrant_client
+    if _qdrant_client is None:
+        _qdrant_client = QdrantClient(
             url=settings.qdrant_url,
             api_key=settings.qdrant_api_key,
             timeout=5.0,
         )
-        client.get_collections()
+    return _qdrant_client
+
+
+@router.get("/health/live")
+async def liveness() -> dict[str, str]:
+    """Liveness probe — apenas verifica que o processo está respondendo."""
+    return {"status": "ok"}
+
+
+@router.get("/health/ready")
+async def readiness() -> JSONResponse:
+    """Readiness probe — verifica conectividade com Qdrant."""
+    checks: dict[str, str] = {}
+    try:
+        _get_qdrant_client().get_collections()
         checks["qdrant"] = "ok"
-    except (UnexpectedResponse, ConnectionError, OSError) as exc:
+    except (UnexpectedResponse, ConnectionError, OSError, Exception) as exc:
         logger.error("health_qdrant_failed", error=str(exc))
         checks["qdrant"] = "error"
 
     all_ok = all(v == "ok" for v in checks.values())
-    status_code = 200 if all_ok else 503
-
     return JSONResponse(
         content={"status": "ok" if all_ok else "degraded", "checks": checks},
-        status_code=status_code,
+        status_code=200 if all_ok else 503,
     )
+
+
+@router.get("/health")
+async def health() -> JSONResponse:
+    """Alias de /health/ready para compatibilidade com health check do CD."""
+    return await readiness()
