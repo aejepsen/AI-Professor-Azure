@@ -58,7 +58,7 @@ def disable_rate_limits():
     _inject_headers checa `if current_limit:` e, com None, pula a injeção de headers
     sem precisar modificar _headers_enabled nem lançar AttributeError.
     """
-    async def _noop_check(self, request, endpoint, deduct):  # noqa: ANN001
+    def _noop_check(self, request, endpoint, deduct):  # noqa: ANN001
         request.state.view_rate_limit = None
 
     with patch.object(Limiter, "_check_request_limit", _noop_check):
