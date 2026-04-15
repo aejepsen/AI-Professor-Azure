@@ -1,3 +1,6 @@
+# Torch CPU-only: evita 4GB+ de CUDA libs desnecessárias em container CPU
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.2+cpu
 fastapi>=0.115.0
 uvicorn[standard]==0.29.0
 langgraph>=1.0.10
